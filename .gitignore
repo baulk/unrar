@@ -1,0 +1,9 @@
+.vscode/
+/build/
+/build.arm64/
+*.pdb
+*.exe
+*.obj
+*.res
+*.out
+/debug.log
