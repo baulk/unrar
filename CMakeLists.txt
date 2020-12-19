@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(UnRAR)
+project(unrar)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR AND NOT MSVC_IDE)
   message(
     FATAL_ERROR
       "In-source builds are not allowed.
-CMake would overwrite the makefiles distributed with Baulk.
+CMake would overwrite the makefiles distributed with UNRAR.
 Please create a directory and run cmake from there, passing the path
 to this source directory as the last argument.
 This process created the file `CMakeCache.txt' and the directory `CMakeFiles'.
@@ -53,5 +53,48 @@ endif()
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
+
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
+# Gen version
+include(VersionFromVCS)
+get_source_info(${CMAKE_CURRENT_SOURCE_DIR} UNRAR_REVISION UNRAR_REMOTE_URL UNRAR_REFNAME)
+string(TIMESTAMP UNRAR_COPYRIGHT_YEAR "%Y")
+
+# UNRAR_REFNAME maybe defined by ci
+if("${UNRAR_REFNAME}" STREQUAL "none")
+  if(DEFINED ENV{UNRAR_REFNAME})
+    set(UNRAR_REFNAME $ENV{UNRAR_REFNAME})
+  endif()
+endif()
+
+if("${UNRAR_REFNAME}" MATCHES "refs/tags/*")
+  string(TIMESTAMP UNRAR_BUILD_TIME "%Y-%m-%dT%H:%M:%SZ")
+else()
+  set(UNRAR_BUILD_TIME "none")
+endif()
+
+if(DEFINED ENV{GITHUB_RUN_NUMBER})
+  set(UNRAR_VERSION_BUILD $ENV{GITHUB_RUN_NUMBER})
+  message(STATUS "UNRAR detect GITHUB_RUN_NUMBER: $ENV{GITHUB_RUN_NUMBER}")
+else()
+  set(UNRAR_VERSION_BUILD 1)
+endif()
+
+set(UNRAR_VERSION_MAJOR 6)
+set(UNRAR_VERSION_MINOR 0)
+set(UNRAR_VERSION_PATCH 0)
+set(PACKAGE_VERSION "${UNRAR_VERSION_MAJOR}.${UNRAR_VERSION_MINOR}.${UNRAR_VERSION_PATCH}")
+
+string(TOLOWER "${CMAKE_C_COMPILER_ARCHITECTURE_ID}" UNRAR_ARCH_NAME)
+set(CPACK_SYSTEM_NAME "win-${UNRAR_ARCH_NAME}")
+set(CPACK_PACKAGE_NAME "unrar")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "unrar")
+set(CPACK_PACKAGE_VERSION_MAJOR ${UNRAR_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${UNRAR_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${UNRAR_VERSION_PATCH})
+set(CPACK_PACKAGE_VERSION ${PACKAGE_VERSION})
+set(CPACK_PACKAGE_VENDOR "unrar")
+set(CPACK_PACKAGE_CONTACT "Alexander Roshal")
 
 add_subdirectory(unrar)

@@ -79,7 +79,9 @@
   #include <direct.h>
   #include <intrin.h>
 
+#if defined(_M_X64)||defined(_M_IX86)
   #define USE_SSE
+#endif
   #define SSE_ALIGNMENT 16
 #else
   #include <dirent.h>

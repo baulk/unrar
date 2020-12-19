@@ -54,3 +54,6 @@ add_executable(unrar
   unrar.rc
   unrar.manifest
 )
+
+install(TARGETS unrar DESTINATION bin)
+install(FILES license.txt DESTINATION share)
