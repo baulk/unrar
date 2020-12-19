@@ -96,5 +96,6 @@ set(CPACK_PACKAGE_VERSION_PATCH ${UNRAR_VERSION_PATCH})
 set(CPACK_PACKAGE_VERSION ${PACKAGE_VERSION})
 set(CPACK_PACKAGE_VENDOR "unrar")
 set(CPACK_PACKAGE_CONTACT "Alexander Roshal")
+include(CPack)
 
 add_subdirectory(unrar)
