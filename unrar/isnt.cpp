@@ -19,6 +19,7 @@ DWORD WinNT()
   //   Result=dwMajorVersion*0x100+dwMinorVersion;
 
 
+  // return Result;
   return WNT_W10;
 }
 #endif

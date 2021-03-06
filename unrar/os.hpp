@@ -81,8 +81,8 @@
 
 #if defined(_M_X64)||defined(_M_IX86)
   #define USE_SSE
-#endif
   #define SSE_ALIGNMENT 16
+#endif
 #else
   #include <dirent.h>
 #endif // _MSC_VER
