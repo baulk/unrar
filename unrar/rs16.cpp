@@ -95,7 +95,9 @@ bool RSCoder16::Init(uint DataCount, uint RecCount, bool *ValidityFlags)
     if (NE > ValidECC || NE == 0 || ValidECC == 0)
       return false;
   }
-  if (ND + NR > gfSize || NR > ND || ND == 0 || NR == 0)
+
+  // 2021.09.01 - we allowed RR and REV >100%, so no more NR > ND check.
+  if (ND + NR > gfSize || /*NR > ND ||*/ ND == 0 || NR == 0)
     return false;
 
   delete[] MX;
@@ -144,7 +146,7 @@ void RSCoder16::MakeDecoderMatrix()
 }
 
 
-// Apply Gauss.Jordan elimination to find inverse of decoder matrix.
+// Apply Gauss–Jordan elimination to find inverse of decoder matrix.
 // We have the square NDxND matrix, but we do not store its trivial
 // diagonal "1" rows matching valid data, so we work with NExND matrix.
 // Our original Cauchy matrix does not contain 0, so we skip search
