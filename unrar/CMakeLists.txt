@@ -1,6 +1,6 @@
-#
+# UNRAR SOURCES
 
-add_executable(unrar
+set(UNRAR_SOURCE_BASE
   archive.cpp
   arcread.cpp
   blake2s.cpp
@@ -51,9 +51,13 @@ add_executable(unrar
   unicode.cpp
   unpack.cpp
   volume.cpp
-  unrar.rc
-  unrar.manifest
 )
 
+add_executable(unrar ${UNRAR_SOURCE_BASE} unrar.rc unrar.manifest)
+add_library(unrardll SHARED ${UNRAR_SOURCE_BASE} dll.cpp dll.def dll.rc)
+set_target_properties(unrardll PROPERTIES OUTPUT_NAME unrar)
+target_compile_definitions(unrardll PRIVATE -DRARDLL -DSILENT)
+
 install(TARGETS unrar DESTINATION bin)
+install(TARGETS unrardll DESTINATION bin)
 install(FILES license.txt DESTINATION share)
