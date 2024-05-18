@@ -22,12 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        unrar_target: [unrar-win64, unrar-win32, unrar-arm64]
+        unrar_target: [unrar-win64, unrar-arm64]
         include:
           - unrar_target: unrar-win64
             short_target: win64
-          - unrar_target: unrar-win32
-            short_target: win32
           - unrar_target: unrar-arm64
             short_target: arm64
     steps:
