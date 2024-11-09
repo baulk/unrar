@@ -22,8 +22,10 @@ set(UNRAR_SOURCE_BASE
   hash.cpp
   headers.cpp
   isnt.cpp
+  largepage.cpp
   list.cpp
   match.cpp
+  motw.cpp
   options.cpp
   pathfn.cpp
   qopen.cpp
