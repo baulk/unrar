@@ -22,39 +22,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        unrar_target: [unrar-win64, unrar-arm64]
-        include:
-          - unrar_target: unrar-win64
-            short_target: win64
-          - unrar_target: unrar-arm64
-            short_target: arm64
+        target: [win64, arm64]
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-      - name: compile-unrar
-        shell: cmd
-        env:
-          vc_arch: ${{ matrix.msvc_arch }}
-          workdir: ${{ matrix.build_dir }}
-        run: pwsh -NoProfile -NoLogo -ExecutionPolicy unrestricted -File "./build.ps1" -Target "${{ matrix.short_target }}"
-
-      - name: Package release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        # create package and show sha256 hash
-        run: |
-          Set-Location build
-          # cleanup zip files
-          Remove-Item -Force *.zip
-          cpack -G ZIP
-          $item=Get-Item unrar*.zip
-          $obj=Get-FileHash -Algorithm SHA256 $item.FullName
-          $baseName=Split-Path -Leaf $item.FullName
-          $env:UNRAR_ASSET_NAME="$baseName"
-          $hashtext=$obj.Algorithm+":"+$obj.Hash.ToLower()
-          $hashtext|Out-File -Encoding utf8 -FilePath "$baseName.sum"
-          Write-Host "$env:UNRAR_ASSET_NAME`n$hashtext"
+      - name: Compile
+        run: pwsh -NoProfile -NoLogo -ExecutionPolicy unrestricted -File "./build.ps1" -Target "${{ matrix.target }}"
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         if: startsWith(github.ref, 'refs/tags/')
