@@ -3,8 +3,8 @@
 #include "version.hpp"
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION 7, 21, 100, 1946
-PRODUCTVERSION 7, 21, 100, 1946
+FILEVERSION 7, 23, 100, 2007
+PRODUCTVERSION 7, 23, 100, 2007
 FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
 FILEFLAGS 0x1L
@@ -21,12 +21,12 @@ BLOCK "000904b0"
 BEGIN
 VALUE "CompanyName", L"Alexander Roshal"
 VALUE "FileDescription", L"UnRAR freeware"
-VALUE "FileVersion", L"7.21.1"
+VALUE "FileVersion", L"7.23.0"
 VALUE "InternalName", L"unrar.exe"
 VALUE "LegalCopyright", L"Copyright © 1993-2026 Alexander Roshal"
 VALUE "OriginalFilename", L"unrar.exe"
 VALUE "ProductName", L"UnRAR freeware"
-VALUE "ProductVersion", L"7.21.1"
+VALUE "ProductVersion", L"7.23.0"
 END
 END
 BLOCK "VarFileInfo"
