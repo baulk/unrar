@@ -16,13 +16,13 @@ bool GetConsolePassword(UIPASSWORD_TYPE Type,const std::wstring &FileName,SecPas
   inline void mprintf(const wchar *fmt,...) {}
   inline void eprintf(const wchar *fmt,...) {}
   inline void Alarm() {}
-  inline int Ask(const wchar *AskStr) {return 0;}
+  inline int Ask(const std::vector<std::wstring> &Items) {return 0;}
   inline void getwstr(std::wstring &str) {}
 #else
   void mprintf(const wchar *fmt,...);
   void eprintf(const wchar *fmt,...);
   void Alarm();
-  int Ask(const wchar *AskStr);
+  int Ask(const std::vector<std::wstring> &Items);
   void getwstr(std::wstring &str);
 #endif
 

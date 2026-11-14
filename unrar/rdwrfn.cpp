@@ -136,8 +136,13 @@ int ComprDataIO::UnpRead(byte *Addr,size_t Count)
       break;
   }
   Archive *SrcArc=(Archive *)SrcFile;
-  if (SrcArc!=NULL)
+  if (SrcArc!=nullptr)
+  {
     ShowUnpRead(SrcArc->NextBlockPos-UnpPackedSize+CurUnpRead,TotalArcSize);
+  
+    CommandData *Cmd=SrcArc->GetCommandData();
+    CheckRuntime(Cmd->StartRuntime,Cmd->MaxRuntime,SrcArc->FileName);
+  }
   if (ReadSize!=-1)
   {
     ReadSize=TotalRead;
@@ -154,8 +159,12 @@ int ComprDataIO::UnpRead(byte *Addr,size_t Count)
 void ComprDataIO::UnpWrite(byte *Addr,size_t Count)
 {
 
-#ifdef RARDLL
   CommandData *Cmd=((Archive *)SrcFile)->GetCommandData();
+  CheckRuntime(Cmd->StartRuntime,Cmd->MaxRuntime,SrcFile->FileName);
+  if (!TestMode && !UnpackToMemory)
+    CheckDiskWrite(Cmd->CurDiskWrite+=Count,Cmd->MaxDiskWrite,SrcFile->FileName);
+
+#ifdef RARDLL
   if (Cmd->DllOpMode!=RAR_SKIP)
   {
     if (Cmd->Callback!=NULL &&

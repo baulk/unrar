@@ -1,14 +1,13 @@
 #include "rar.hpp"
 
+// Read text file to std::vector<wchar>
 bool ReadTextFile(
   const std::wstring &Name,
-  StringList *List,
   bool Config,
   bool AbortOnError,
   RAR_CHARSET SrcCharset,
-  bool Unquote,
-  bool SkipComments,
-  bool ExpandEnvStr)
+  std::wstring &DataW,
+  size_t MaxSize)
 {
   std::wstring FileName;
 
@@ -35,14 +34,17 @@ bool ReadTextFile(
   size_t DataSize=0,ReadSize;
   const int ReadBlock=4096;
 
+  // byte vector is more convenient than std::string for BOM comparisons below.
+  // bytes are unsigned unlike chars and we need unsigned comparisons.
   std::vector<byte> Data(ReadBlock);
   while ((ReadSize=SrcFile.Read(&Data[DataSize],ReadBlock))!=0)
   {
     DataSize+=ReadSize;
+    if (MaxSize>0 && Data.size()+ReadBlock>MaxSize)  // Break if can exceed MaxSize on next read.
+      break;
     Data.resize(DataSize+ReadBlock); // Always have ReadBlock available for next data.
   }
-  // Set to really read size, so we can zero terminate it correctly.
-  Data.resize(DataSize);
+  Data.resize(DataSize); // Set to really read size.
 
   int LittleEndian=DataSize>=2 && Data[0]==255 && Data[1]==254 ? 1:0;
   int BigEndian=DataSize>=2 && Data[0]==254 && Data[1]==255 ? 1:0;
@@ -50,8 +52,6 @@ bool ReadTextFile(
 
   if (SrcCharset==RCH_DEFAULT)
     SrcCharset=DetectTextEncoding(Data.data(),DataSize);
-
-  std::vector<wchar> DataW(ReadBlock);
 
   if (SrcCharset==RCH_DEFAULT || SrcCharset==RCH_OEM || SrcCharset==RCH_ANSI)
   {
@@ -61,7 +61,7 @@ bool ReadTextFile(
       OemToCharA((char *)Data.data(),(char *)Data.data());
 #endif
     DataW.resize(Data.size());
-    CharToWide((char *)Data.data(),DataW.data(),DataW.size());
+    CharToWide((char *)Data.data(),&DataW[0],DataW.size());
   }
 
   if (SrcCharset==RCH_UNICODE)
@@ -73,21 +73,44 @@ bool ReadTextFile(
       LittleEndian=1;
     }
     
-    DataW.resize(Data.size()/2+1);
+    DataW.resize(Data.size()/2);
     size_t End=Data.size() & ~1; // We need even bytes number for UTF-16.
     for (size_t I=Start;I<End;I+=2)
       DataW[(I-Start)/2]=Data[I+BigEndian]+Data[I+LittleEndian]*256;
-    DataW[(End-Start)/2]=0;
   }
 
   if (SrcCharset==RCH_UTF8)
   {
     Data.push_back(0); // Zero terminate data.
     DataW.resize(Data.size());
-    UtfToWide((const char *)(Data.data()+(Utf8 ? 3:0)),DataW.data(),DataW.size());
+    UtfToWide((const char *)(Data.data()+(Utf8 ? 3:0)),&DataW[0],DataW.size());
   }
 
-  wchar *CurStr=DataW.data();
+  // CharToWide and UtfToWide calls above add the excessive trailing 0.
+  // Remove it here.
+  if (!DataW.empty() && DataW.back()==0)
+    DataW.pop_back();
+
+  return true;
+}
+
+
+// Read text file to StringList.
+bool ReadTextFile(
+  const std::wstring &Name,
+  StringList *List,
+  bool Config,
+  bool AbortOnError,
+  RAR_CHARSET SrcCharset,
+  bool Unquote,
+  bool SkipComments,
+  bool ExpandEnvStr)
+{
+  std::wstring DataW;
+  if (!ReadTextFile(Name,Config,AbortOnError,SrcCharset,DataW,0))
+    return false;
+
+  wchar *CurStr=&DataW[0];
 
   while (*CurStr!=0)
   {

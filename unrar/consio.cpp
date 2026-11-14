@@ -75,7 +75,10 @@ static void cvt_wprintf(FILE *dest,const wchar *fmt,va_list arglist)
   // No need for PrintfPrepareFmt here, vwstrprintf calls it.
   std::wstring s=vwstrprintf(fmt,arglist);
 
-  ReplaceEsc(s);
+  // If format string contains \b, this is percent progress and we allow it.
+  // But we reject \b too in arglist.
+  if (wcschr(fmt,L'\b')==nullptr)
+    ReplaceUnsafeChars(s);
 
 #ifdef _WIN_ALL
   if (dest==stdout && StdoutRedirected || dest==stderr && StderrRedirected)
@@ -329,79 +332,82 @@ void getwstr(std::wstring &str)
 // because it might be convenient to press Enter to some not dangerous
 // prompts like "insert disk with next volume". We should call this function
 // again in case of 0 in dangerous prompt such as overwriting file.
-int Ask(const wchar *AskStr)
+int Ask(const std::vector<std::wstring> &Items)
 {
   uiAlarm(UIALARM_QUESTION);
 
-  const uint MaxItems=10;
-  wchar Item[MaxItems][40];
-  uint ItemKeyPos[MaxItems],NumItems=0;
+  std::vector<uint> ItemsHotPos; // Hotkey positions for request words.
 
-  for (const wchar *NextItem=AskStr;NextItem!=nullptr;NextItem=wcschr(NextItem+1,'_'))
+  for (size_t I=0;I<Items.size();I++)
   {
-    wchar *CurItem=Item[NumItems];
-    wcsncpyz(CurItem,NextItem+1,ASIZE(Item[0]));
-    wchar *EndItem=wcschr(CurItem,'_');
-    if (EndItem!=nullptr)
-      *EndItem=0;
-    uint KeyPos=0,CurKey;
-    while ((CurKey=CurItem[KeyPos])!=0)
+    const std::wstring &CurItem=Items[I];
+
+    uint HotPos=0; // Hotkey position in current word.
+    for (;HotPos<CurItem.size();HotPos++)
     {
-      bool Found=false;
-      for (uint I=0;I<NumItems && !Found;I++)
-        if (toupperw(Item[I][ItemKeyPos[I]])==toupperw(CurKey))
-          Found=true;
-      if (!Found && CurKey!=' ')
+      wchar CurKey=toupperw(CurItem[HotPos]); // Character to try as hotkey.
+
+      // Check if current character of current word was already used
+      // as a hotkey in preceding words.
+      bool AlreadyUsed=false;
+      for (uint J=0;J<I && !AlreadyUsed;J++)
+        if (toupperw(Items[J][ItemsHotPos[J]])==CurKey)
+          AlreadyUsed=true;
+
+      // Search until we find an unused character except space, which isn't
+      // suitable for hotkey, or until all characters are verified.
+      if (!AlreadyUsed && CurKey!=' ')
         break;
-      KeyPos++;
     }
-    ItemKeyPos[NumItems]=KeyPos;
-    NumItems++;
+    // Store either the hotkey position or position of trailing 0 if no hotkeys
+    // for current word is available.
+    ItemsHotPos.push_back(HotPos);
   }
 
-  for (uint I=0;I<NumItems;I++)
+  uint NumericHotkey=1; // Current numeric hotkey if all alphabetical are already used.
+
+  for (uint I=0;I<Items.size();I++)
   {
-    eprintf(I==0 ? (NumItems>3 ? L"\n":L" "):L", ");
-    uint KeyPos=ItemKeyPos[I];
-    for (uint J=0;J<KeyPos;J++)
-      eprintf(L"%c",Item[I][J]);
-    eprintf(L"[%c]%ls",Item[I][KeyPos],&Item[I][KeyPos+1]);
+    eprintf(I==0 ? (Items.size()>3 ? L"\n":L" "):L", ");
+    uint HotPos=ItemsHotPos[I];
+    std::wstring CurStr=Items[I];
+    wcslower(CurStr); // In case a localized version has uppercase characters.
+    std::wstring Prefix=CurStr.substr(0,HotPos);
+    eprintf(L"%s",Prefix.c_str()); // Print the part of string before hotkey.
+
+    wchar HotChar=CurStr[HotPos];
+    if (HotChar!=0)
+      eprintf(L"[%c]%ls",toupperw(HotChar),&CurStr[HotPos+1]); // Print hotkey and rest of word.
+    else
+      if (NumericHotkey<10)
+        eprintf(L"[%c]",'0'+NumericHotkey++); // If no hotkey is available for current word, assign a numeric one.
   }
   eprintf(L" ");
   std::wstring Str;
   getwstr(Str);
   wchar Ch=toupperw(Str[0]);
-  for (uint I=0;I<NumItems;I++)
-    if (Ch==Item[I][ItemKeyPos[I]])
-      return I+1;
-  return 0;
+
+  NumericHotkey=1;
+  for (uint I=0;I<Items.size();I++)
+  {
+    wchar HotChar=Items[I][ItemsHotPos[I]];
+    if (HotChar==0 && NumericHotkey<10)
+    {
+      if (Ch=='0'+NumericHotkey) // If no hotkey is available for current word, check a numeric one.
+        return I+1;
+      NumericHotkey++; // Go to next numeric hotkey.
+    }
+    else
+      if (Ch==toupperw(HotChar))
+        return I+1;
+  }
+  return 0; // No hotkeys matched.
 }
 #endif
 
 
-static bool IsCommentUnsafe(const std::wstring &Data)
-{
-  for (size_t I=0;I<Data.size();I++)
-    if (Data[I]==27 && Data[I+1]=='[')
-      for (size_t J=I+2;J<Data.size();J++)
-      {
-        // Return true for <ESC>[{key};"{string}"p used to redefine
-        // a keyboard key on some terminals.
-        if (Data[J]=='\"')
-          return true;
-        if (!IsDigit(Data[J]) && Data[J]!=';')
-          break;
-      }
-  return false;
-}
-
-
 void OutComment(const std::wstring &Comment)
 {
-  // After we added Esc filtering to mprintf, this check seems to be excessive.
-  // Still keeping it for now just in case.
-  if (IsCommentUnsafe(Comment))
-    return;
   const size_t MaxOutSize=0x400;
   for (size_t I=0;I<Comment.size();I+=MaxOutSize)
   {

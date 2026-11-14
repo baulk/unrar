@@ -1,6 +1,8 @@
 #include "rar.hpp"
 
 static int RarErrorToDll(RAR_EXIT ErrCode);
+static int ReadHeader(HANDLE hArcData,RARHeaderDataEx *D,bool &RepeatRead);
+static int ProcessFile(HANDLE hArcData,int Operation,char *DestPath,char *DestName,wchar *DestPathW,wchar *DestNameW);
 
 struct DataSet
 {
@@ -151,6 +153,11 @@ HANDLE PASCAL RAROpenArchiveEx(struct RAROpenArchiveDataEx *r)
         Data->Cmd.GetBriefMaskList(Sep==nullptr ? L"*":Sep+1,Data->Cmd.MotwList);
     }
 #endif
+    Data->Cmd.MaxDiskWrite=uint64(r->MaxDiskWrite)*0x100000;
+    Data->Cmd.MaxAllocate=uint64(r->MaxAllocate)*0x100000;
+    Data->Cmd.MaxRuntime=r->MaxRuntime;
+    if (Data->Cmd.MaxRuntime!=0)
+      Data->Cmd.StartRuntime=MonoClock()/CLOCKS_PER_SEC;
 
     Data->Extract.ExtractArchiveInit(Data->Arc);
     return (HANDLE)Data;
@@ -184,16 +191,18 @@ HANDLE PASCAL RAROpenArchiveEx(struct RAROpenArchiveDataEx *r)
 int PASCAL RARCloseArchive(HANDLE hArcData)
 {
   DataSet *Data=(DataSet *)hArcData;
+  int Code;
   try
   {
     bool Success=Data==NULL ? false:Data->Arc.Close();
-    delete Data;
-    return Success ? ERAR_SUCCESS : ERAR_ECLOSE;
+    Code = Success ? ERAR_SUCCESS : ERAR_ECLOSE;
   }
   catch (RAR_EXIT ErrCode)
   {
-    return Data->Cmd.DllError!=0 ? Data->Cmd.DllError : RarErrorToDll(ErrCode);
+    Code=Data->Cmd.DllError!=0 ? Data->Cmd.DllError : RarErrorToDll(ErrCode);
   }
+  delete Data;
+  return Code;
 }
 
 
@@ -223,20 +232,45 @@ int PASCAL RARReadHeader(HANDLE hArcData,struct RARHeaderData *D)
 
 int PASCAL RARReadHeaderEx(HANDLE hArcData,struct RARHeaderDataEx *D)
 {
+  int Result;
+  bool RepeatRead=true; // Set to true to call ReadHeader() at least once.
+  for (uint RepeatCount=0;RepeatRead;RepeatCount++)
+  {
+    // Prevent the excessively long loop. Set the maximum allowed value
+    // to maximum plausible legitimate volumes number, because these read
+    // repeats are caused by volumes.
+    if (RepeatCount>0x10000)
+      return ERAR_BAD_ARCHIVE;
+
+    Result=ReadHeader(hArcData,D,RepeatRead);
+  }
+  return Result;
+}
+
+
+static int ReadHeader(HANDLE hArcData,RARHeaderDataEx *D,bool &RepeatRead)
+{
   DataSet *Data=(DataSet *)hArcData;
+  RepeatRead=false;
+
   try
   {
     if ((Data->HeaderSize=(int)Data->Arc.SearchBlock(HEAD_FILE))<=0)
     {
       if (Data->Arc.Volume && Data->Arc.GetHeaderType()==HEAD_ENDARC &&
           Data->Arc.EndArcHead.NextVolume)
+      {
+        // We can be here if last file in a volume fits into volume completely
+        // and doesn't have "split after" flag. So we use EndArcHead.NextVolume
+        // to know that we need to continue to next volume.
         if (MergeArchive(Data->Arc,NULL,false,'L'))
         {
           Data->Arc.Seek(Data->Arc.CurBlockPos,SEEK_SET);
-          return RARReadHeaderEx(hArcData,D);
+          RepeatRead=true; // Repeat to read the first header of next volume.
+          return ERAR_SUCCESS;
         }
-        else
-          return ERAR_EOPEN;
+        return ERAR_EOPEN;
+      }
 
       if (Data->Arc.BrokenHeader)
         return ERAR_BAD_DATA;
@@ -252,10 +286,14 @@ int PASCAL RARReadHeaderEx(HANDLE hArcData,struct RARHeaderDataEx *D)
     if (Data->OpenMode==RAR_OM_LIST && hd->SplitBefore)
     {
       int Code=RARProcessFile(hArcData,RAR_SKIP,NULL,NULL);
-      if (Code==0)
-        return RARReadHeaderEx(hArcData,D);
-      else
-        return Code;
+      if (Code==ERAR_SUCCESS)
+      {
+        // Skip the current "split before" header, which is normally the first
+        // header in non-first volume, and read next header.
+        RepeatRead=true;
+        return ERAR_SUCCESS;
+      }
+      return Code;
     }
     wcsncpyz(D->ArcNameW,Data->Arc.FileName.c_str(),ASIZE(D->ArcNameW));
     WideToChar(D->ArcNameW,D->ArcName,ASIZE(D->ArcName));
@@ -341,7 +379,7 @@ int PASCAL RARReadHeaderEx(HANDLE hArcData,struct RARHeaderDataEx *D)
 }
 
 
-int PASCAL ProcessFile(HANDLE hArcData,int Operation,char *DestPath,char *DestName,wchar *DestPathW,wchar *DestNameW)
+static int ProcessFile(HANDLE hArcData,int Operation,char *DestPath,char *DestName,wchar *DestPathW,wchar *DestNameW)
 {
   DataSet *Data=(DataSet *)hArcData;
   try
@@ -417,11 +455,15 @@ int PASCAL ProcessFile(HANDLE hArcData,int Operation,char *DestPath,char *DestNa
       // if archive is still open to avoid calling file operations on
       // the invalid file handle. Some of our file operations like Seek()
       // process such invalid handle correctly, some not.
+      uint ServiceCount=0;
       while (Data->Arc.IsOpened() && Data->Arc.ReadHeader()!=0 && 
              Data->Arc.GetHeaderType()==HEAD_SERVICE)
       {
         Data->Extract.ExtractCurrentFile(Data->Arc,Data->HeaderSize,Repeat);
         Data->Arc.SeekToNext();
+
+        if (++ServiceCount>1024) // Prevent excessively long loop.
+          return ERAR_BAD_ARCHIVE;
       }
       Data->Arc.Seek(Data->Arc.CurBlockPos,SEEK_SET);
     }
@@ -517,6 +559,8 @@ static int RarErrorToDll(RAR_EXIT ErrCode)
       return ERAR_SUCCESS; // 0.
     case RARX_BADARC:
       return ERAR_BAD_ARCHIVE;
+    case RARX_USERLIMIT:
+      return ERAR_USER_LIMIT;
     default:
       return ERAR_UNKNOWN;
   }

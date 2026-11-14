@@ -27,11 +27,15 @@ class Rijndael
 #endif
 
 #ifdef USE_NEON_AES
+#ifdef __GNUC__
     // In Android we must specify -march=armv8-a+crypto compiler switch
     // to support Neon AES commands, "crypto" attribute seems to be optional.
-    __attribute__((target("+crypto")))
+//    __attribute__((target("+crypto")))
+#endif
     void blockEncryptNeon(const byte *input,size_t numBlocks,byte *outBuffer);
-    __attribute__((target("+crypto")))
+#ifdef __GNUC__
+//    __attribute__((target("+crypto")))
+#endif
     void blockDecryptNeon(const byte *input, size_t numBlocks, byte *outBuffer);
 
     bool AES_Neon;

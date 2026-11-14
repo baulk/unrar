@@ -99,7 +99,7 @@ bool Archive::DoGetComment(std::wstring &CmtData)
       byte *UnpData;
       size_t UnpDataSize;
       DataIO.GetUnpackedData(&UnpData,&UnpDataSize);
-      if (UnpDataSize>0)
+      if (UnpDataSize>0 && UnpDataSize<=MAXCMTSIZE)
       {
 #ifdef _WIN_ALL
         // If we ever decide to extend it to Android, we'll need to alloc
@@ -113,7 +113,7 @@ bool Archive::DoGetComment(std::wstring &CmtData)
   }
   else
   {
-    if (CmtLength==0)
+    if (CmtLength==0 || CmtLength>MAXCMTSIZE)
       return false;
     std::vector<byte> CmtRaw(CmtLength);
     int ReadSize=Read(CmtRaw.data(),CmtLength);

@@ -48,8 +48,7 @@ struct RecRSThreadData
 class RecVolumes5
 {
   private:
-    void ProcessRS(CommandData *Cmd,uint DataNum,const byte *Data,uint MaxRead,bool Encode);
-    void ProcessRS(CommandData *Cmd,uint MaxRead,bool Encode);
+    bool ProcessRS(CommandData *Cmd,uint DataNum,const byte *Data,uint MaxRead,bool Encode);
     uint ReadHeader(File *RecFile,bool FirstRev);
 
     std::vector<RecVolItem> RecItems;
@@ -73,6 +72,12 @@ class RecVolumes5
 #endif
     uint MaxUserThreads; // Maximum number of threads defined by user.
     RecRSThreadData *ThreadData; // Array to store thread parameters.
+
+    // If we create multiple coders with same parameters for multithreaded
+    // processing, it is faster and takes less memory to share a single
+    // RSCoder16 internal matrix. Especially noticeable when recoving
+    // a lot of RAR volumes using REV volumes.
+    uint *SharedMX = nullptr;
   public: // 'public' only because called from thread functions.
     void ProcessAreaRS(RecRSThreadData *td);
   public:
@@ -82,7 +87,7 @@ class RecVolumes5
     void Test(CommandData *Cmd,const std::wstring &Name);
 };
 
-bool RecVolumesRestore(CommandData *Cmd,const std::wstring &Name,bool Silent);
+bool RecVolumesRestore(CommandData *Cmd,const std::wstring &Name,bool FromExtract);
 void RecVolumesTest(CommandData *Cmd,Archive *Arc,const std::wstring &Name);
 
 #endif

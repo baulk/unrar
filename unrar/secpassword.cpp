@@ -181,7 +181,21 @@ void SecHideData(void *Data,size_t DataSize,bool Encode,bool CrossProcess)
   // Try to utilize the secure Crypt[Un]ProtectMemory if possible.
   if (GlobalCryptLoader.pCryptProtectMemory==NULL)
     GlobalCryptLoader.Load();
+
+  // CryptProtectMemory requires to align the data size at CRYPTPROTECTMEMORY_BLOCK_SIZE.
   size_t Aligned=DataSize-DataSize%CRYPTPROTECTMEMORY_BLOCK_SIZE;
+
+  if (Aligned<DataSize)
+  {
+    // If there is a data chunk less than CRYPTPROTECTMEMORY_BLOCK_SIZE
+    // at the end of data, which can't be processed by CryptProtectMemory,
+    // obfuscate it slightly here. Usually the data size is multiple of
+    // CRYPTPROTECTMEMORY_BLOCK_SIZE, so this code isn't invoked.
+    uint Key=GetCurrentProcessId();
+    for (size_t I=Aligned;I<DataSize;I++)
+      *((byte *)Data+I)^=Key+I+75;
+  }
+
   DWORD Flags=CrossProcess ? CRYPTPROTECTMEMORY_CROSS_PROCESS : CRYPTPROTECTMEMORY_SAME_PROCESS;
   if (Encode)
   {

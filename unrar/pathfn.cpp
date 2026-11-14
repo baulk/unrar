@@ -1127,29 +1127,34 @@ void ConvertToPrecomposed(std::wstring &Name)
 }
 
 
+// Prevent users to accidentally create files, which they might fail to open
+// in their favorite apps or even fail to delete in a file manager.
 void MakeNameCompatible(std::wstring &Name)
 {
   // Remove trailing spaces and dots in file name and in dir names in path.
-  for (int I=0;I<(int)Name.size();I++)
-    if (I+1==Name.size() || IsPathDiv(Name[I+1]))
-      while (I>=0 && (Name[I]=='.' || Name[I]==' '))
+  for (size_t I=0;I<Name.size();I++)
+    if ((Name[I]=='.' || Name[I]==' ') && (I+1==Name.size() || IsPathDiv(Name[I+1])))
+    {
+      // 2024.05.01: Permit several legitimate "dot before separator" cases
+      // including exotic d:.\path1 and d:..\path1 requested by a user.
+      // Leading dots are possible here if specified by user
+      // in the destination path.
+      bool Remove=true;
+      if (Name[I]=='.')
       {
-        if (Name[I]=='.')
-        {
-          // 2024.05.01: Permit ./path1, path1/./path2, ../path1,
-          // path1/../path2 and exotic Win32 d:.\path1, d:..\path1 paths
-          // requested by user. Leading dots are possible here if specified
-          // by user in the destination path.
-          if (I==0 || IsPathDiv(Name[I-1]) || I==2 && IsDriveLetter(Name))
-            break;
-          if (I>=1 && Name[I-1]=='.' && (I==1 || IsPathDiv(Name[I-2]) ||
-              I==3 && IsDriveLetter(Name)))
-            break;
-        }
+        // Permit ./path1, path1/./path2 and d:.\path1.
+        if (I==0 || IsPathDiv(Name[I-1]) || I==2 && IsDriveLetter(Name))
+          Remove=false;
 
-        Name[I]='_';
-        break;
+        // Permit ../path1, path1/../path2 and d:..\path1.
+        if (I>=1 && Name[I-1]=='.' && (I==1 || IsPathDiv(Name[I-2]) ||
+            I==3 && IsDriveLetter(Name)))
+          Remove=false;
       }
+
+      if (Remove)
+        Name[I]='_';
+    }
 
   // Rename reserved device names, such as aux.txt to _aux.txt.
   // We check them in path components too, where they are also prohibited.

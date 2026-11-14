@@ -205,6 +205,12 @@ struct FileHeader:BlockHeader
   RarTime ctime;
   RarTime atime;
 
+  // It is debatable if we shall convert file sizes to unsigned.
+  // While it is more natural for file sizes, some of our file APIs like
+  // File::Tell() and File::FileLength() return signed values, so we would
+  // need to cast. Some well known style guidelines recommend to use signed
+  // for everything but bit fields. Also some modern languages do not have
+  // unsigned type, so potential porting unsigned would be more difficult.
   int64 PackSize;
   int64 UnpSize;
   int64 MaxSize; // Reserve packed and unpacked size bytes for vint of this size.
@@ -272,6 +278,17 @@ struct FileHeader:BlockHeader
     return FileName==Name;
   }
 
+  bool IsSameOS() // Return true if archived OS matches current.
+  {
+  #ifdef _WIN_ALL
+    return HSType==HSYS_WINDOWS;
+  #elif defined(_UNIX)
+    return HSType==HSYS_UNIX;
+  #else
+    return false;
+  #endif
+  }
+
 //  FileHeader& operator = (FileHeader &hd);
 };
 
@@ -286,7 +303,11 @@ struct EndArcHeader:BaseBlock
 
   // 7 additional zero bytes can be stored here if EARC_REVSPACE is set.
 
-  bool NextVolume; // Not last volume.
+  // Not last volume. Useful if last file in a volume fits into volume
+  // completely and doesn't have "split after" flag. So we use NextVolume
+  // to know that we need to continue to next volume.
+  bool NextVolume;
+
   bool DataCRC;
   bool RevSpace;
   bool StoreVolNumber;

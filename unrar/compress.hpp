@@ -55,7 +55,11 @@ enum FilterType {
   FILTER_AUDIO, FILTER_RGB, FILTER_ITANIUM, FILTER_TEXT, 
   
   // These values can be changed.
-  FILTER_LONGRANGE,FILTER_EXHAUSTIVE,FILTER_NONE
+  FILTER_LONGRANGE,FILTER_EXHAUSTIVE,FILTER_NONE,
+
+  FILTER_LAST // To detect the maximum filters number.
 };
+
+static constexpr size_t MAX_FILTER_TYPES=FILTER_LAST;
 
 #endif

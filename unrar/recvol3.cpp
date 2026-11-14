@@ -78,7 +78,7 @@ static bool IsNewStyleRev(const std::wstring &Name)
 }
 
 
-bool RecVolumes3::Restore(CommandData *Cmd,const std::wstring &Name,bool Silent)
+bool RecVolumes3::Restore(CommandData *Cmd,const std::wstring &Name,bool FromExtract)
 {
   std::wstring ArcName=Name;
   bool NewStyle=false; // New style .rev volumes are supported since RAR 3.10.
@@ -251,7 +251,7 @@ bool RecVolumes3::Restore(CommandData *Cmd,const std::wstring &Name,bool Silent)
     if (RecFileSize==0)
       RecFileSize=NewFile->FileLength();
   }
-  if (!Silent || FoundRecVolumes!=0)
+  if (!FromExtract || FoundRecVolumes!=0)
     uiMsg(UIMSG_RECVOLFOUND,FoundRecVolumes);
   if (FoundRecVolumes==0)
     return false;
@@ -481,7 +481,7 @@ bool RecVolumes3::Restore(CommandData *Cmd,const std::wstring &Name,bool Silent)
 #if !defined(SILENT)
   if (!Cmd->DisablePercentage)
     mprintf(L"\b\b\b\b100%%");
-  if (!Silent && !Cmd->DisableDone)
+  if (!FromExtract && !Cmd->DisableDone)
     mprintf(St(MDone));
 #endif
   return true;
@@ -535,7 +535,7 @@ void RecVolumes3::Test(CommandData *Cmd,const std::wstring &Name)
     CalcFileSum(&CurFile,&CalcCRC,NULL,1,Length-4,Cmd->DisablePercentage ? 0 : CALCFSUM_SHOWPROGRESS);
     if (FileCRC==CalcCRC)
     {
-      mprintf(L"%s%s ",L"\b\b\b\b\b ",St(MOk));
+      mprintf(L"\b\b\b\b\b %s ",St(MOk));
     }
     else
     {

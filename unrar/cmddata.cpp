@@ -590,7 +590,33 @@ void CommandData::ProcessSwitch(const wchar *Switch)
         case 0:
           Lock=true;
           break;
+        default:
+          BadSwitch(Switch);
       }
+      break;
+    case 'L':
+      if (wcsnicomp(Switch+1,L"IM",2)==0)
+      {
+        switch(toupperw(Switch[3]))
+        {
+          case 'D':
+            CurDiskWrite=0; // It is already 0 for CLI, just reminder to reset it for GUI in another place.
+            MaxDiskWrite=GetModSize(Switch+4,1);
+            break;
+          case 'M':
+            MaxAllocate=GetModSize(Switch+4,1);
+            break;
+          case 'T':
+            StartRuntime=MonoClock()/CLOCKS_PER_SEC; // CLI sets it here, GUI in another place.
+            MaxRuntime=atoiw(Switch+4);
+            break;
+          default:
+            BadSwitch(Switch);
+            break;
+        }
+        break;
+      }
+      BadSwitch(Switch);
       break;
     case 'M':
       switch(toupperw(Switch[1]))
@@ -747,8 +773,6 @@ void CommandData::ProcessSwitch(const wchar *Switch)
           SaveHardLinks=true;
           break;
 
-
-#ifdef SAVE_LINKS
         case 'L':
           SaveSymLinks=true;
           for (uint I=2;Switch[I]!=0;I++)
@@ -765,7 +789,6 @@ void CommandData::ProcessSwitch(const wchar *Switch)
                 break;
             }
           break;
-#endif
 #ifdef PROPAGATE_MOTW
         case 'M':
           {
@@ -1295,6 +1318,7 @@ void CommandData::ReportWrongSwitches(RARFORMAT Format)
 
 
 // Get size for string with optional trailing modifiers like "100m".
+// DefMultiplier defines a multipler if no modifiers are present.
 int64 CommandData::GetModSize(const wchar *S,uint DefMultiplier)
 {
   int64 Size=0,FloatingDivider=0;

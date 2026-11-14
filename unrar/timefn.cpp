@@ -3,9 +3,9 @@
 void RarTime::GetLocal(RarLocalTime *lt)
 {
 #ifdef _WIN_ALL
-  FILETIME ft;
+  FILETIME ft{}; // Zero init structures to get the predictable result if conversion fails.
   GetWinFT(&ft);
-  FILETIME lft;
+  FILETIME lft{};
 
   if (WinNT() < WNT_VISTA)
   {
@@ -32,7 +32,7 @@ void RarTime::GetLocal(RarLocalTime *lt)
     lft.dwHighDateTime=(DWORD)(Corrected>>32);
   }
 
-  SYSTEMTIME st;
+  SYSTEMTIME st{};
   FileTimeToSystemTime(&lft,&st);
   lt->Year=st.wYear;
   lt->Month=st.wMonth;

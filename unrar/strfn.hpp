@@ -64,6 +64,6 @@ bool ExpandEnvironmentStr(std::wstring &Str);
 #endif
 
 void TruncateAtZero(std::wstring &Str);
-void ReplaceEsc(std::wstring &Str);
+void ReplaceUnsafeChars(std::wstring &Str);
 
 #endif

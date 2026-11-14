@@ -68,6 +68,7 @@ class Archive:public File
     size_t SearchRR();
     int GetRecoveryPercent() {return RecoveryPercent;}
     size_t ReadHeader();
+    bool SanitizeHeader();
     void CheckArc(bool EnableBroken);
     void CheckOpen(const std::wstring &Name);
     bool WCheckOpen(const std::wstring &Name);
@@ -77,7 +78,6 @@ class Archive:public File
     void SeekToNext();
     bool CheckAccess();
     bool IsArcDir();
-    void ConvertAttributes();
     void VolSubtractHeaderSize(size_t SubSize);
     uint FullHeaderSize(size_t Size);
     int64 GetStartPos();

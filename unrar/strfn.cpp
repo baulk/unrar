@@ -575,16 +575,19 @@ void TruncateAtZero(std::wstring &Str)
 }
 
 
-void ReplaceEsc(std::wstring &Str)
+void ReplaceUnsafeChars(std::wstring &Str)
 {
-  std::wstring::size_type Pos=0;
-  while (true)
+  for (size_t I=0;I<Str.size();I++)
   {
-    Pos=Str.find(L'\033',Pos);
-    if (Pos==std::wstring::npos)
-      break;
-    Str[Pos]=L'\'';
-    Str.insert(Pos+1,L"\\033'");
-    Pos+=6;
+    wchar C=Str[I];
+    if (C==0x08 || C==0x0d && Str[I+1]!=0x0a || C==0x1a || C==0x1b || C==0x7f ||
+        C>=0x80 && C<=0x9f || C>=0x202a && C<=0x202e)
+    {
+      // We build unrar.dll without wstrprintf, so we use swprintf here.
+      wchar Replace[20];
+      swprintf(Replace,ASIZE(Replace),L"\\x%02x",C);
+      Str.replace(I,1,Replace);
+      I+=wcslen(Replace)-1;
+    }
   }
 }

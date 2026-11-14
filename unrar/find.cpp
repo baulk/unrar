@@ -65,7 +65,10 @@ bool FindFile::Next(FindData *fd,bool GetSymLink)
     if (strcmp(ent->d_name,".")==0 || strcmp(ent->d_name,"..")==0)
       continue;
     if (!CharToWide(std::string(ent->d_name),Name))
+    {
       uiMsg(UIERROR_INVALIDNAME,L"",Name);
+      continue;
+    }
 
     if (CmpName(FindMask,Name,MATCH_NAMES))
     {
@@ -118,11 +121,7 @@ bool FindFile::FastFind(const std::wstring &FindMask,FindData *fd,bool GetSymLin
   struct stat st;
   if (GetSymLink)
   {
-#ifdef SAVE_LINKS
     if (lstat(FindMaskA.c_str(),&st)!=0)
-#else
-    if (stat(FindMaskA.c_str(),&st)!=0)
-#endif
     {
       fd->Error=(errno!=ENOENT);
       return false;

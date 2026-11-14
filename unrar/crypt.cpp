@@ -102,15 +102,10 @@ void GetRnd(byte *RndBuf,size_t BufSize)
 {
   bool Success=false;
 #if defined(_WIN_ALL)
-  HCRYPTPROV hProvider = 0;
-  if (CryptAcquireContext(&hProvider, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
-  {
-    Success=CryptGenRandom(hProvider, (DWORD)BufSize, RndBuf) != FALSE;
-    CryptReleaseContext(hProvider, 0);
-  }
+  Success = BCryptGenRandom(NULL, RndBuf, (ULONG)BufSize, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
 #elif defined(_UNIX)
   FILE *rndf = fopen("/dev/urandom", "rb");
-  if (rndf!=NULL)
+  if (rndf != nullptr)
   {
     Success=fread(RndBuf, 1, BufSize, rndf) == BufSize;
     fclose(rndf);

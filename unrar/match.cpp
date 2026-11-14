@@ -81,54 +81,63 @@ bool CmpName(const wchar *Wildcard,const wchar *Name,uint CmpMode)
 }
 
 
-bool match(const wchar *pattern,const wchar *string,bool ForceCase)
+// 2026.09.23: Updated to faster non-recursive version.
+bool match(const wchar *pattern, const wchar *string, bool ForceCase)
 {
-  for (;; ++string)
-  {
-    wchar stringc=touppercw(*string,ForceCase);
-    wchar patternc=touppercw(*pattern++,ForceCase);
-    switch (patternc)
-    {
-      case 0:
-        return stringc==0;
-      case '?':
-        if (stringc == 0)
-          return false;
-        break;
-      case '*':
-        if (*pattern==0)
-          return true;
-        if (*pattern=='.')
-        {
-          if (pattern[1]=='*' && pattern[2]==0)
-            return true;
-          const wchar *dot=wcschr(string,'.');
-          if (pattern[1]==0)
-            return (dot==NULL || dot[1]==0);
-          if (dot!=NULL)
-          {
-            string=dot;
-            if (wcspbrk(pattern,L"*?")==NULL && wcschr(string+1,'.')==NULL)
-              return mwcsicompc(pattern+1,string+1,ForceCase)==0;
-          }
-        }
+  const wchar *star = nullptr; // Points to the last '*' seen.
+  const wchar *last_s = nullptr; // String position checked after last '*'
 
-        while (*string)
-          if (match(pattern,string++,ForceCase))
-            return true;
-        return false;
-      default:
-        if (patternc != stringc)
-        {
-          // Allow "name." mask match "name" and "name.\" match "name\".
-          if (patternc=='.' && (stringc==0 || stringc=='\\' || stringc=='.'))
-            return match(pattern,string,ForceCase);
-          else
-            return false;
-        }
-        break;
+  while (*string != 0)
+  {
+    wchar stringc = touppercw(*string, ForceCase);
+    wchar patternc = touppercw(*pattern, ForceCase);
+
+    if (stringc == patternc || *pattern == '?')
+    {
+      // String character matched pattern character or '?'.
+      // Advance both pointers.
+      string++;
+      pattern++;
+      continue;
     }
+    if (*pattern == '*')
+    {
+      if (pattern[1] == '.' && pattern[2] == 0)
+      {
+        // Allow file*. to match both 'file' and 'file.', but not 'file.ext'.
+        const wchar *dot=wcschr(string,'.');
+        return dot==nullptr || dot[1]==0;
+      }
+      
+      // Found '*' in pattern. Save position after '*' in pattern,
+      // we'll compare it against all positions of remaining part of string.
+      star = ++pattern;
+
+      // Store the first position to check in string in last_s,
+      // we'll be incrementing it.
+      last_s = string;
+      continue;
+    }
+    if (star) // Current characters mismatched, but we had '*' in pattern.
+    {
+      pattern = star; // Return pattern to first position after '*'.
+      string = ++last_s; // Increment the string position to check.
+
+      continue;
+    }
+
+    return false; // No '*' and characters mismatch.
   }
+
+  // String is over, skip remaining trailing asterisks in the pattern.
+  while (*pattern == '*')
+    pattern++;
+
+  // Also match 'file' with 'file.*'.
+  if (pattern[0]=='.' && pattern[1]=='*' && pattern[2]==0)
+    return true;
+
+  return *pattern==0; // Match if nothing left in pattern.
 }
 
 

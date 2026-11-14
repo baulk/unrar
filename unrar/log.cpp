@@ -25,7 +25,7 @@ void Log(const wchar *ArcName,const wchar *fmt,...)
 
   std::wstring s=vwstrprintf(fmt,arglist);
 
-  ReplaceEsc(s);
+  ReplaceUnsafeChars(s);
   
   va_end(arglist);
   eprintf(L"%ls",s.c_str());

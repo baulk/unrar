@@ -22,6 +22,7 @@
 #include "sha256.hpp"
 #include "blake2s.hpp"
 #include "hash.hpp"
+#include "compress.hpp"
 #include "options.hpp"
 #include "rijndael.hpp"
 #include "crypt.hpp"
@@ -57,7 +58,6 @@
 #include "rawread.hpp"
 #include "encname.hpp"
 #include "resource.hpp"
-#include "compress.hpp"
 
 #include "rarvm.hpp"
 #include "model.hpp"

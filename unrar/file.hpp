@@ -93,8 +93,8 @@ class File
     // Several functions below are 'virtual', because they are redefined
     // by Archive for QOpen and by MultiFile for split files in WinRAR.
     virtual bool Open(const std::wstring &Name,uint Mode=FMF_READ);
-    void TOpen(const std::wstring &Name);
-    bool WOpen(const std::wstring &Name);
+    void TOpen(const std::wstring &Name,uint Mode=FMF_READ);
+    bool WOpen(const std::wstring &Name,uint Mode=FMF_READ);
     bool Create(const std::wstring &Name,uint Mode=FMF_UPDATE|FMF_SHAREREAD);
     void TCreate(const std::wstring &Name,uint Mode=FMF_UPDATE|FMF_SHAREREAD);
     bool WCreate(const std::wstring &Name,uint Mode=FMF_UPDATE|FMF_SHAREREAD);

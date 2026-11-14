@@ -80,8 +80,9 @@ class CmdExtract
     // in target was extracted.
     bool ConvertSymlinkPaths;
 
-    // Last path checked for symlinks. We use it to improve the performance,
-    // so we do not check recently checked folders again.
+    // Last path checked by LinksToDirs() for symlinks presence.
+    // We use it to improve the performance, so we do not check recently
+    // checked folders again.
     std::wstring LastCheckedSymlink;
 
 #if defined(_WIN_ALL) && !defined(SFX_MODULE) && !defined(SILENT)

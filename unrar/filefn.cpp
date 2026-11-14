@@ -110,7 +110,11 @@ void SetDirTime(const std::wstring &Name,RarTime *ftm,RarTime *ftc,RarTime *fta)
   }
 
   if (hFile==INVALID_HANDLE_VALUE)
+  {
+    if (ResetAttr)
+      SetFileAttr(Name,DirAttr);
     return;
+  }
   FILETIME fm,fc,fa;
   if (sm)
     ftm->GetWinFT(&fm);
@@ -195,10 +199,15 @@ bool FileExist(const std::wstring &Name)
 {
 #ifdef _WIN_ALL
   return GetFileAttr(Name)!=0xffffffff;
-#elif defined(ENABLE_ACCESS)
+#elif defined(_UNIX)
   std::string NameA;
   WideToChar(Name,NameA);
-  return access(NameA.c_str(),0)==0;
+  
+  struct stat st;
+  // Use lstat instead of stat to check existence of link itself instead of
+  // its target. So the overwrite function in Unix can properly detect
+  // and remove a symlink.
+  return lstat(NameA.c_str(),&st)==0;
 #else
   FindData FD;
   return FindFile::FastFind(Name,&FD);

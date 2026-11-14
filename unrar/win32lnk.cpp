@@ -29,7 +29,8 @@ typedef struct _REPARSE_DATA_BUFFER {
 
 
 
-bool CreateReparsePoint(CommandData *Cmd,const wchar *Name,FileHeader *hd)
+bool CreateReparsePoint(CommandData *Cmd,const std::wstring &LinkName,
+  const std::wstring &TargetName,FileHeader *hd)
 {
   static bool PrivSet=false;
   if (!PrivSet)
@@ -40,7 +41,7 @@ bool CreateReparsePoint(CommandData *Cmd,const wchar *Name,FileHeader *hd)
     PrivSet=true;
   }
 
-  const std::wstring &SubstName=hd->RedirName;
+  const std::wstring &SubstName=TargetName;
   size_t SubstLength=SubstName.size();
 
   // REPARSE_DATA_BUFFER receives both SubstName and PrintName strings,
@@ -72,43 +73,43 @@ bool CreateReparsePoint(CommandData *Cmd,const wchar *Name,FileHeader *hd)
   // excessive and we keep it just in case here. If junction is absolute,
   // it will be catched by other checks below. If junction isn't absolute,
   // it will not follow the target path once created.
-  if (!Cmd->AbsoluteLinks && (AbsPath || IsFullPath(hd->RedirName) ||
+  if (!Cmd->AbsoluteLinks && (AbsPath || IsFullPath(TargetName) ||
       hd->RedirType==FSREDIR_JUNCTION ||
-      !IsRelativeSymlinkSafe(Cmd,hd->FileName,Name,hd->RedirName)))
+      !IsRelativeSymlinkSafe(Cmd,hd->FileName,LinkName,TargetName)))
   {
-    uiMsg(UIERROR_SKIPUNSAFELINK,hd->FileName,hd->RedirName);
+    uiMsg(UIERROR_SKIPUNSAFELINK,hd->FileName,TargetName);
     ErrHandler.SetErrorCode(RARX_WARNING);
     return false;
   }
 
-  CreatePath(Name,true,Cmd->DisableNames);
+  CreatePath(LinkName,true,Cmd->DisableNames);
 
   // Overwrite prompt was already issued and confirmed earlier, so we can
   // remove existing symlink or regular file here. PrepareToDelete was also
   // called earlier inside of uiAskReplaceEx.
-  if (FileExist(Name))
-    if (IsDir(GetFileAttr(Name)))
-      DelDir(Name);
+  if (FileExist(LinkName))
+    if (IsDir(GetFileAttr(LinkName)))
+      DelDir(LinkName);
     else
-      DelFile(Name);
+      DelFile(LinkName);
 
   // 'DirTarget' check is important for Unix symlinks to directories.
   // Unix symlinks do not have their own 'directory' attribute.
   if (hd->Dir || hd->DirTarget)
   {
-    if (!CreateDir(Name))
+    if (!CreateDir(LinkName))
     {
-      uiMsg(UIERROR_DIRCREATE,L"",Name);
+      uiMsg(UIERROR_DIRCREATE,L"",LinkName);
       ErrHandler.SetErrorCode(RARX_CREATE);
       return false;
     }
   }
   else
   {
-    HANDLE hFile=CreateFile(Name,GENERIC_WRITE,0,NULL,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,NULL);
+    HANDLE hFile=CreateFile(LinkName.c_str(),GENERIC_WRITE,0,NULL,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,NULL);
     if (hFile == INVALID_HANDLE_VALUE)
     {
-      ErrHandler.CreateErrorMsg(Name);
+      ErrHandler.CreateErrorMsg(LinkName);
       return false;
     }
     CloseHandle(hFile);
@@ -160,12 +161,12 @@ bool CreateReparsePoint(CommandData *Cmd,const wchar *Name,FileHeader *hd)
     else
       return false;
 
-  HANDLE hFile=CreateFile(Name,GENERIC_READ|GENERIC_WRITE,0,NULL,
+  HANDLE hFile=CreateFile(LinkName.c_str(),GENERIC_READ|GENERIC_WRITE,0,NULL,
                OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT| 
                FILE_FLAG_BACKUP_SEMANTICS,NULL);
   if (hFile==INVALID_HANDLE_VALUE)
   {
-    ErrHandler.CreateErrorMsg(Name);
+    ErrHandler.CreateErrorMsg(LinkName);
     ErrHandler.SetErrorCode(RARX_CREATE);
     return false;
   }
@@ -176,7 +177,7 @@ bool CreateReparsePoint(CommandData *Cmd,const wchar *Name,FileHeader *hd)
       rdb->ReparseDataLength,NULL,0,&Returned,NULL))
   { 
     CloseHandle(hFile);
-    uiMsg(UIERROR_SLINKCREATE,L"",Name);
+    uiMsg(UIERROR_SLINKCREATE,L"",LinkName);
 
     DWORD LastError=GetLastError();
     if ((LastError==ERROR_ACCESS_DENIED || LastError==ERROR_PRIVILEGE_NOT_HELD) &&
@@ -186,9 +187,9 @@ bool CreateReparsePoint(CommandData *Cmd,const wchar *Name,FileHeader *hd)
     ErrHandler.SetErrorCode(RARX_CREATE);
 
     if (hd->Dir)
-      RemoveDirectory(Name);
+      DelDir(LinkName);
     else
-      DeleteFile(Name);
+      DelFile(LinkName);
     return false;
   }
   File LinkFile;
@@ -198,7 +199,9 @@ bool CreateReparsePoint(CommandData *Cmd,const wchar *Name,FileHeader *hd)
     Cmd->xctime==EXTTIME_NONE ? NULL:&hd->ctime,
     Cmd->xatime==EXTTIME_NONE ? NULL:&hd->atime);
   LinkFile.Close();
-  if (!Cmd->IgnoreGeneralAttr)
-    SetFileAttr(Name,hd->FileAttr);
+
+  // Do not try to set other OS attributes.
+  if (!Cmd->IgnoreGeneralAttr && hd->IsSameOS())
+    SetFileAttr(LinkName,hd->FileAttr);
   return true;
 }

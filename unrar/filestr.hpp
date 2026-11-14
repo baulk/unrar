@@ -1,6 +1,17 @@
 #ifndef _RAR_FILESTR_
 #define _RAR_FILESTR_
 
+// Read text file to std::wstring
+bool ReadTextFile(
+  const std::wstring &Name,
+  bool Config,
+  bool AbortOnError,
+  RAR_CHARSET SrcCharset,
+  std::wstring &DataW,
+  size_t MaxSize
+);
+
+// Read text file to StringList.
 bool ReadTextFile(
   const std::wstring &Name,
   StringList *List,

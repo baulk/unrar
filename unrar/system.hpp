@@ -19,6 +19,11 @@
 
 void InitSystemOptions(int SleepTime);
 void SetPriority(int Priority);
+
+void CheckAllocate(uint64 Requested,uint64 MaxAllocate,const std::wstring &ArcName);
+void CheckDiskWrite(uint64 CurWrite,uint64 MaxWrite,const std::wstring &ArcName);
+void CheckRuntime(uint StartTime,uint MaxTime,const std::wstring &ArcName);
+
 clock_t MonoClock();
 void Wait();
 bool EmailFile(const std::wstring &FileName,std::wstring MailToW);

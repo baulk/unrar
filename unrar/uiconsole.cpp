@@ -29,7 +29,10 @@ UIASKREP_RESULT uiAskReplace(std::wstring &Name,int64 FileSize,RarTime *FileTime
   int Choice=0;
   do
   {
-    Choice=Ask(St(AllowRename ? MYesNoAllRenQ : MYesNoAllQ));
+    if (AllowRename)
+      Choice=Ask({St(MReqYes),St(MReqNo),St(MReqAll),St(MReqNever),St(MReqRename),St(MReqQuit)});
+    else
+      Choice=Ask({St(MReqYes),St(MReqNo),St(MReqAll),St(MReqNever),St(MReqQuit)});
   } while (Choice==0); // 0 means invalid input.
   switch(Choice)
   {
@@ -140,6 +143,9 @@ void uiMsgStore::Msg()
       Log(Str[0],St(MErrRead),Str[1]);
       break;
     case UIERROR_FILEWRITE:
+      // Print \n to separate from write procent when invoked with -y,
+      // so uiAskRepeatWrite isn't called before.
+      mprintf(L"\n");
       Log(Str[0],St(MErrWrite),Str[1]);
       break;
 #ifndef SFX_MODULE
@@ -237,6 +243,9 @@ void uiMsgStore::Msg()
       break;
     case UIERROR_RECVOLCANNOTFIX:
       mprintf(St(MRecVolCannotFix));
+      break;
+    case UIERROR_RECVOLEXTRLIMIT:
+      Log(Str[0],St(MRecVolExtrLimit));
       break;
     case UIERROR_EXTRDICTOUTMEM:
       Log(Str[0],St(MExtrDictOutMem),Num[0]);
@@ -366,6 +375,15 @@ void uiMsgStore::Msg()
     case UIERROR_SKIPUNSAFELINK:
       Log(NULL,St(MSkipUnsafeLink),Str[0],Str[1]);
       break;
+    case UIERROR_MAXMEMORY:
+      Log(Str[0],St(MMemoryExceeded),Num64[0],Num64[1]);
+      break;
+    case UIERROR_MAXWRITE:
+      Log(Str[0],St(MDiskWriteExceeded),Num64[0],Num64[1]);
+      break;
+    case UIERROR_MAXRUNTIME:
+      Log(Str[0],St(MRuntimeExceeded),Num[0],Num[1]);
+      break;
 
 #ifndef SFX_MODULE
     case UIMSG_STRING:
@@ -457,14 +475,14 @@ void uiAlarm(UIALARM_TYPE Type)
 bool uiAskNextVolume(std::wstring &VolName)
 {
   eprintf(St(MAskNextVol),VolName.c_str());
-  return Ask(St(MContinueQuit))!=2;
+  return Ask({St(MReqContinue),St(MReqQuit)})!=2;
 }
 
 
 void uiAskRepeatRead(const std::wstring &FileName,bool &Ignore,bool &All,bool &Retry,bool &Quit)
 {
   eprintf(St(MErrReadInfo));
-  int Code=Ask(St(MIgnoreAllRetryQuit));
+  int Code=Ask({St(MReqIgnore),St(MReqIgnoreAll),St(MReqRetry),St(MReqQuit)});
 
   Ignore=(Code==1);
   All=(Code==2);
@@ -477,7 +495,7 @@ bool uiAskRepeatWrite(const std::wstring &FileName,bool DiskFull)
 {
   mprintf(L"\n");
   Log(NULL,St(DiskFull ? MNotEnoughDisk:MErrWrite),FileName.c_str());
-  return Ask(St(MRetryAbort))==1;
+  return Ask({St(MReqRetry),St(MReqAbort)})==1;
 }
 
 

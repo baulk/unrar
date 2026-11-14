@@ -3,10 +3,23 @@
 
 #if defined(__WIN32__) || defined(_WIN32)
   #define _WIN_ALL // Defined for all Windows platforms, 32 and 64 bit, mobile and desktop.
+
+  #define _WIN_X64STR   L"x64"
+  #define _WIN_A64STR   L"ARM64"
+  #define _WIN_X86STR   L"x86"
+
   #ifdef _M_X64
     #define _WIN_64
+    #define _WIN_X64
+    #define _WIN_ARSTR _WIN_X64STR
+  #elif defined(_M_ARM64)
+    #define _WIN_64
+    #define _WIN_ARM64
+    #define _WIN_ARSTR _WIN_A64STR
   #else
     #define _WIN_32
+    #define _WIN_X86
+    #define _WIN_ARSTR _WIN_X86STR
   #endif
 #endif
 

@@ -32,7 +32,7 @@ size_t Archive::ReadHeader()
   // It is important to check ReadSize>0 here, because it is normal
   // for RAR2 and RAR3 archives without end of archive block to have
   // NextBlockPos==CurBlockPos after the end of archive has reached.
-  if (ReadSize>0 && NextBlockPos<=CurBlockPos)
+  if (!SanitizeHeader() || ReadSize>0 && NextBlockPos<=CurBlockPos)
   {
     BrokenHeaderMsg();
     ReadSize=0;
@@ -41,7 +41,26 @@ size_t Archive::ReadHeader()
   if (ReadSize==0)
     CurHeaderType=HEAD_UNKNOWN;
 
+  if (Cmd!=nullptr) // Check for excessively slow processing.
+    CheckRuntime(Cmd->StartRuntime,Cmd->MaxRuntime,FileName);
+
   return ReadSize;
+}
+
+
+bool Archive::SanitizeHeader()
+{
+  if (CurHeaderType==HEAD_FILE || CurHeaderType==HEAD_SERVICE)
+  {
+    FileHeader *hd=CurHeaderType==HEAD_FILE ? &FileHead:&SubHead;
+    if (hd->PackSize<0 || hd->UnpSize<0)
+    {
+      hd->PackSize=hd->UnpSize=0;
+      BrokenHeaderMsg();
+      return false; // Stop further archive processing.
+    }
+  }
+  return true;
 }
 
 
@@ -340,7 +359,8 @@ size_t Archive::ReadHeader15()
 
         size_t ReadNameSize=Min(NameSize,MAXPATHSIZE);
         std::string FileName(ReadNameSize,0);
-        Raw.GetB((byte *)&FileName[0],ReadNameSize);
+        if (ReadNameSize>0) // Can't refer to str[0] below if str.size()==0.
+          Raw.GetB((byte *)&FileName[0],ReadNameSize);
 
         if (FileBlock)
         {
@@ -889,7 +909,8 @@ size_t Archive::ReadHeader50()
 
         size_t ReadNameSize=Min(NameSize,MAXPATHSIZE);
         std::string FileName(ReadNameSize,0);
-        Raw.GetB((byte *)&FileName[0],ReadNameSize);
+        if (ReadNameSize>0) // Can't refer to str[0] below if str.size()==0.
+          Raw.GetB((byte *)&FileName[0],ReadNameSize);
 
         UtfToWide(FileName.data(),hd->FileName);
 
@@ -1355,81 +1376,8 @@ bool Archive::IsArcDir()
 }
 
 
-void Archive::ConvertAttributes()
-{
-#ifdef _WIN_ALL
-  if (FileHead.HSType!=HSYS_WINDOWS)
-    FileHead.FileAttr=FileHead.Dir ? 0x10 : 0x20;
-#endif
-#ifdef _UNIX
-  // umask defines which permission bits must not be set by default
-  // when creating a file or directory. The typical default value
-  // for the process umask is S_IWGRP | S_IWOTH (octal 022),
-  // resulting in 0644 mode for new files.
-  // Normally umask is applied automatically when creating a file,
-  // but we set attributes with chmod later, so we need to calculate
-  // resulting attributes here. We do it only for non-Unix archives.
-  // We restore native Unix attributes as is, because it can be backup.
-  static mode_t mask = (mode_t) -1;
-
-  if (mask == (mode_t) -1)
-  {
-    // umask call returns the current umask value. Argument (022) is not
-    // really important here.
-    mask = umask(022);
-
-    // Restore the original umask value, which was changed to 022 above.
-    umask(mask);
-  }
-
-  switch(FileHead.HSType)
-  {
-    case HSYS_WINDOWS:
-      {
-        // Mapping MSDOS, OS/2 and Windows file attributes to Unix.
-
-        if (FileHead.FileAttr & 0x10) // FILE_ATTRIBUTE_DIRECTORY
-        {
-          // For directories we use 0777 mask.
-          FileHead.FileAttr=0777 & ~mask;
-        }
-        else
-          if (FileHead.FileAttr & 1)  // FILE_ATTRIBUTE_READONLY
-          {
-            // For read only files we use 0444 mask with 'w' bits turned off.
-            FileHead.FileAttr=0444 & ~mask;
-          }
-          else
-          {
-            // umask does not set +x for regular files, so we use 0666
-            // instead of 0777 as for directories.
-            FileHead.FileAttr=0666 & ~mask;
-          }
-      }
-      break;
-    case HSYS_UNIX:
-      break;
-    default:
-      if (FileHead.Dir)
-        FileHead.FileAttr=0x41ff & ~mask;
-      else
-        FileHead.FileAttr=0x81b6 & ~mask;
-      break;
-  }
-#endif
-}
-
-
 void Archive::ConvertFileHeader(FileHeader *hd)
 {
-/*
-  if (hd->HSType==HSYS_UNKNOWN)
-    if (hd->Dir)
-      hd->FileAttr=0x10;
-    else
-      hd->FileAttr=0x20;
-*/
-
 #ifdef _WIN_ALL
   if (hd->HSType==HSYS_UNIX) // Convert Unix, OS X and Android decomposed chracters to Windows precomposed.
     ConvertToPrecomposed(hd->FileName);
@@ -1524,7 +1472,7 @@ bool Archive::ReadSubData(std::vector<byte> *UnpData,File *DestFile,bool TestMod
     else
     {
       UnpData->resize((size_t)SubHead.UnpSize);
-      SubDataIO.SetUnpackToMemory(&(*UnpData)[0],(uint)SubHead.UnpSize);
+      SubDataIO.SetUnpackToMemory(UnpData->data(),(uint)SubHead.UnpSize);
     }
   }
   if (SubHead.Encrypted)

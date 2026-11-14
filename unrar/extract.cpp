@@ -162,7 +162,7 @@ EXTRACT_ARC_CODE CmdExtract::ExtractArchive()
   {
     Arc.SetHandleType(FILE_HANDLESTD);
 #ifdef USE_QOPEN
-    Arc.SetProhibitQOpen(true);
+    Arc.SetProhibitQOpen(true); // Can't seek to QO record in stdin mode.
 #endif
   }
   else
@@ -452,16 +452,18 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
 
   // We can get negative sizes in corrupt archive and it is unacceptable
   // for size comparisons in ComprDataIO::UnpRead, where we cast sizes
-  // to size_t and can exceed another read or available size. We could fix it
-  // when reading an archive. But we prefer to do it here, because this
-  // function is called directly in unrar.dll, so we fix bad parameters
-  // passed to dll. Also we want to see real negative sizes in the listing
-  // of corrupt archive. To prevent the uninitialized data access, perform
-  // these checks after rejecting zero length and non-file headers above.
+  // to size_t and can exceed another read or available size. We check it
+  // both here and when reading headers, because this function is called
+  // directly in unrar.dll, so we fix bad parameters passed to DLL.
+  // To prevent the uninitialized data access, perform/ these checks after
+  // rejecting zero length and non-file headers above.
+  Arc.SanitizeHeader();
+/*  
   if (Arc.FileHead.PackSize<0)
     Arc.FileHead.PackSize=0;
   if (Arc.FileHead.UnpSize<0)
     Arc.FileHead.UnpSize=0;
+*/
 
   // This check duplicates Analyze.EndPos and Analyze.EndName
   // in all cases except volumes on removable media.
@@ -485,7 +487,7 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
   if (MatchFound && !EqualNames)
     AllMatchesExact=false;
 
-  Arc.ConvertAttributes();
+//  Arc.ConvertAttributes();
 
 #if !defined(SFX_MODULE) && !defined(RARDLL)
   if (Arc.FileHead.SplitBefore && FirstFile && !UseExactVolName)
@@ -918,19 +920,52 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
 
           std::wstring NameExisting;
           ExtrPrepareName(Arc,RedirName,NameExisting);
-          if (FileCreateMode && !NameExisting.empty()) // *NameExisting can be empty in case of excessive -ap switch.
-            if (Type==FSREDIR_HARDLINK)
-              LinkSuccess=ExtractHardlink(Cmd,DestFileName,NameExisting);
+
+          // *NameExisting can be empty in case of excessive -ap switch.
+          // LinksToDirs() removes a possible pre-existing symlink in target
+          // path to prevent the following: suppose there is the pre-existing
+          // "dir -> d:\dir" symlink and d:\dir\fname file, we unpack the hard
+          // link "fname -> dir\file.ext", then unpack the usual file "fname",
+          // we'll overwrite d:\dir\fname outside of destination. But RAR
+          // will not create "dir -> d:\dir" symlink without -ola switch and if
+          // attacker can create it, they can also simply remove d:\dir\fname.
+          // So this check seems to be excessive, but we keep it just in case.
+          // LinksToDirs() just removes a symlink, but doesn't replace it
+          // with folder. Unlike usual files, hard link target will not
+          // re-create these missing folders, so extraction of hard link
+          // with symlinks in path just fails, because its target is missing.
+          if (FileCreateMode && !NameExisting.empty() && (Cmd->AbsoluteLinks ||
+              LinksToDirs(NameExisting,Cmd->ExtrPath,LastCheckedSymlink)))
+          {
+            FindData FD;
+            if (!Cmd->AbsoluteLinks && FindFile::FastFind(NameExisting,&FD,true) && FD.IsLink)
+            {
+              uiMsg(UIERROR_SKIPUNSAFELINK,L"hardlink->symlink: "+DestFileName,NameExisting);
+            }
             else
-              LinkSuccess=ExtractFileCopy(CurFile,Arc.FileName,RedirName,DestFileName,NameExisting,Arc.FileHead.UnpSize);
+              if (Type==FSREDIR_HARDLINK)
+                LinkSuccess=ExtractHardlink(Cmd,DestFileName,NameExisting);
+              else
+                LinkSuccess=ExtractFileCopy(CurFile,Arc.FileName,RedirName,DestFileName,NameExisting,Arc.FileHead.UnpSize);
+          }
         }
         else
           if (Type==FSREDIR_UNIXSYMLINK || Type==FSREDIR_WINSYMLINK || Type==FSREDIR_JUNCTION)
           {
             if (FileCreateMode)
             {
+              std::wstring RedirName=Arc.FileHead.RedirName;
+
+#ifdef _WIN_ALL
+              // If we applied MakeNameCompatible() to a file or directory
+              // targeted by symlink, we need to adjust the symlink target
+              // accordingly, so it points at modified name.
+              if (!Cmd->AllowIncompatNames)
+                MakeNameCompatible(RedirName);
+#endif
+
               bool UpLink;
-              LinkSuccess=ExtractSymlink(Cmd,DataIO,Arc,DestFileName,UpLink);
+              LinkSuccess=ExtractSymlink(Cmd,DataIO,Arc,DestFileName,RedirName,UpLink);
 
               ConvertSymlinkPaths|=LinkSuccess && UpLink;
 
@@ -969,6 +1004,8 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
             UnstoreFile(DataIO,Arc.FileHead.UnpSize);
           else
           {
+            CheckAllocate(Arc.FileHead.WinSize,Cmd->MaxAllocate,Arc.FileName);
+
             try
             {
               Unp->Init(Arc.FileHead.WinSize,Arc.FileHead.Solid);
@@ -1018,8 +1055,11 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
         if (ValidCRC)
         {
           if (Command!='P' && Command!='I' && !Cmd->DisableNames)
-            mprintf(L"%s%s ",Cmd->DisablePercentage ? L" ":L"\b\b\b\b\b ",
-              Arc.FileHead.FileHash.Type==HASH_NONE ? L"  ?":St(MOk));
+          {
+            if (!Cmd->DisablePercentage)
+              mprintf(L"\b\b\b\b\b");
+            mprintf(L" %s ",Arc.FileHead.FileHash.Type==HASH_NONE ? L"  ?":St(MOk));
+          }
         }
         else
         {
@@ -1064,7 +1104,13 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
         // link, we can call PrepareToDelete(), which affects link target
         // attributes too. So we set link attributes to restore both target
         // and link attributes if PrepareToDelete() has changed them.
-        bool SetAttr=SetAll || Arc.FileHead.RedirType==FSREDIR_HARDLINK;
+        // We set file attributes only if archived OS is the same as current.
+        // Otherwise we resort to attributes assigned by default.
+        // Previously we tried to convert Windows attributes in Unix using
+        // umask(), but umasks() forces to temporarily set a new mask
+        // for process just to read the old one and this is not thread safe.
+        bool SetAttr=(SetAll || Arc.FileHead.RedirType==FSREDIR_HARDLINK) &&
+                     !Cmd->IgnoreGeneralAttr && Arc.FileHead.IsSameOS();
 
         // Call SetFileHeaderExtra to set Unix user and group for usual files,
         // references and symlinks. Unix symlink can have its own owner data.
@@ -1074,16 +1120,20 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
         // so we can set file attributes also for hard links, which do not
         // have the open CurFile. These strings are the same for other items.
 
+#ifdef PROPAGATE_MOTW
+        // Set MOTW for usual files, hard links, symlinks and references.
+        // It changes timestamp, so set MOTW before setting timestamp.
+        // Also set MOTW before setting file attributes, because read-only
+        // attribute can prevent setting MOTW.
+        Arc.Motw.CreateZoneIdStream(DestFileName,Cmd->MotwList);
+#endif
+
         if (SetTimeAndSize)
         {
           // We could preallocate more space than really written to broken file
           // or file with crafted header.
           if (Preallocated>0 && (BrokenFile || DataIO.CurUnpWrite!=Preallocated))
             CurFile.Truncate();
-
-#ifdef PROPAGATE_MOTW
-          Arc.Motw.CreateZoneIdStream(DestFileName,Cmd->MotwList);
-#endif
 
           CurFile.SetOpenFileTime(
             Cmd->xmtime==EXTTIME_NONE ? NULL:&Arc.FileHead.mtime,
@@ -1111,7 +1161,7 @@ bool CmdExtract::ExtractCurrentFile(Archive &Arc,size_t HeaderSize,bool &Repeat)
           if (geteuid()!=0) // Unless root.
             FileAttr &= ~(S_ISUID|S_ISGID); // Strip SUID and SGID for standard users.
 #endif
-          if (!Cmd->IgnoreGeneralAttr && !SetFileAttr(DestFileName,FileAttr))
+          if (!SetFileAttr(DestFileName,FileAttr))
           {
             uiMsg(UIERROR_FILEATTR,Arc.FileName,DestFileName);
             // Android cannot set file attributes and while UIERROR_FILEATTR
@@ -1405,7 +1455,7 @@ bool CmdExtract::ExtrGetPassword(Archive &Arc,const std::wstring &ArcFileName,Ra
     if (!GlobalPassword && !Arc.FileHead.Solid)
     {
       eprintf(St(MUseCurPsw),ArcFileName.c_str());
-      switch(Cmd->AllYes ? 1 : Ask(St(MYesNoAll)))
+      switch(Cmd->AllYes ? 1 : Ask({St(MReqYes),St(MReqNo),St(MReqAll)}))
       {
         case -1:
           ErrHandler.Exit(RARX_USERBREAK);
@@ -1462,8 +1512,15 @@ void CmdExtract::ExtrCreateDir(Archive &Arc,const std::wstring &ArcFileName)
   if (geteuid()!=0) // Unless root.
     FileAttr &= ~S_ISUID; // Strip SUID and keep SGID for standard users.
 #endif
+
+  // We set directory attributes only if archived OS is the same as current.
+  // Otherwise we resort to attributes assigned by default.
+  // Previously we tried to convert Windows attributes in Unix using
+  // umask(), but umasks() forces to temporarily set a new mask
+  // for process just to read the old one and this is not thread safe.
+  bool SetAttr=!Cmd->IgnoreGeneralAttr && Arc.FileHead.IsSameOS();
   
-  MKDIR_CODE MDCode=MakeDir(DestFileName,!Cmd->IgnoreGeneralAttr,FileAttr);
+  MKDIR_CODE MDCode=MakeDir(DestFileName,SetAttr,FileAttr);
   bool DirExist=false;
   if (MDCode!=MKDIR_SUCCESS)
   {
@@ -1479,7 +1536,7 @@ void CmdExtract::ExtrCreateDir(Archive &Arc,const std::wstring &ArcFileName)
     if (!DirExist)
     {
       CreatePath(DestFileName,true,Cmd->DisableNames);
-      MDCode=MakeDir(DestFileName,!Cmd->IgnoreGeneralAttr,FileAttr);
+      MDCode=MakeDir(DestFileName,SetAttr,FileAttr);
       if (MDCode!=MKDIR_SUCCESS && !IsNameUsable(DestFileName))
       {
         uiMsg(UIMSG_CORRECTINGNAME,Arc.FileName);
@@ -1493,7 +1550,7 @@ void CmdExtract::ExtrCreateDir(Archive &Arc,const std::wstring &ArcFileName)
             LinksToDirs(DestFileName,Cmd->ExtrPath,LastCheckedSymlink)))
         {
           CreatePath(DestFileName,true,Cmd->DisableNames);
-          MDCode=MakeDir(DestFileName,!Cmd->IgnoreGeneralAttr,FileAttr);
+          MDCode=MakeDir(DestFileName,SetAttr,FileAttr);
         }
       }
     }
@@ -1510,7 +1567,7 @@ void CmdExtract::ExtrCreateDir(Archive &Arc,const std::wstring &ArcFileName)
     // strips all attributes not in umask(). Archives created by recent
     // RAR versions store directories after their contents, so risk of setting
     // attributes, which prevent us creating files, is minimal.
-    if (!Cmd->IgnoreGeneralAttr)
+    if (SetAttr)
       SetFileAttr(DestFileName,FileAttr);
 #endif
     PrevProcessed=true;
@@ -1518,7 +1575,7 @@ void CmdExtract::ExtrCreateDir(Archive &Arc,const std::wstring &ArcFileName)
   else
     if (DirExist)
     {
-      if (!Cmd->IgnoreGeneralAttr)
+      if (SetAttr)
         SetFileAttr(DestFileName,FileAttr);
       PrevProcessed=true;
     }
@@ -1671,6 +1728,8 @@ void CmdExtract::AnalyzeArchive(const std::wstring &ArcName,bool Volume,bool New
   // if extracted file resides completely in the beginning of current one.
   bool FirstFile=true;
 
+  uint64 TotalListData=0; // Total size of strings in RefList.
+
   while (true)
   {
     Archive Arc(Cmd);
@@ -1757,14 +1816,17 @@ void CmdExtract::AnalyzeArchive(const std::wstring &ArcName,bool Volume,bool New
 
               // Limit the maximum size of reference sources list to some
               // sensible value to prevent the excessive memory allocation.
-              size_t MaxListSize=1000000;
+              const size_t MaxListItems=1000000;
+              const uint64 MaxListData=1000000000;
 
-              if (!AlreadyAdded && RefList.size()<MaxListSize)
+              if (!AlreadyAdded && RefList.size()<MaxListItems &&
+                  TotalListData<MaxListData)
               {
                 ExtractRef Ref{};
                 Ref.RefName=Arc.FileHead.RedirName;
                 Ref.RefCount=1;
                 RefList.push_back(Ref);
+                TotalListData+=Ref.RefName.size();
               }
             }
           }

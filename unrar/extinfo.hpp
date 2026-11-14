@@ -2,7 +2,7 @@
 #define _RAR_EXTINFO_
 
 bool IsRelativeSymlinkSafe(CommandData *Cmd,const std::wstring &SrcName,std::wstring PrepSrcName,const std::wstring &TargetName);
-bool ExtractSymlink(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,const std::wstring &LinkName,bool &UpLink);
+bool ExtractSymlink(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,const std::wstring &LinkName,const std::wstring &TargetName,bool &UpLink);
 #ifdef _UNIX
 void SetUnixOwner(Archive &Arc,const std::wstring &FileName);
 #endif

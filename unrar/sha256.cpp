@@ -144,6 +144,7 @@ void sha256_done(sha256_context *ctx, byte *Digest)
   RawPutBE4(ctx->H[6], Digest + 24);
   RawPutBE4(ctx->H[7], Digest + 28);
 
+  /* Wipe variables */
   sha256_init(ctx);
 }
 

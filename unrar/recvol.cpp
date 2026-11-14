@@ -6,12 +6,12 @@
 
 
 
-bool RecVolumesRestore(CommandData *Cmd,const std::wstring &Name,bool Silent)
+bool RecVolumesRestore(CommandData *Cmd,const std::wstring &Name,bool FromExtract)
 {
   Archive Arc(Cmd);
   if (!Arc.Open(Name))
   {
-    if (!Silent)
+    if (!FromExtract)
       ErrHandler.OpenErrorMsg(Name);
     return false;
   }
@@ -33,12 +33,12 @@ bool RecVolumesRestore(CommandData *Cmd,const std::wstring &Name,bool Silent)
   if (Fmt==RARFMT15)
   {
     RecVolumes3 RecVol(Cmd,false);
-    return RecVol.Restore(Cmd,Name,Silent);
+    return RecVol.Restore(Cmd,Name,FromExtract);
   }
   else
   {
     RecVolumes5 RecVol(Cmd,false);
-    return RecVol.Restore(Cmd,Name,Silent);
+    return RecVol.Restore(Cmd,Name,FromExtract);
   }
 }
 

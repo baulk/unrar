@@ -767,7 +767,6 @@ std::wstring::size_type wcscasestr(const std::wstring &str, const std::wstring &
 }
 
 
-#ifndef SFX_MODULE
 wchar* wcslower(wchar *s)
 {
   // If string doesn't contain non-English or uppercase English characters,
@@ -821,7 +820,6 @@ void wcsupper(std::wstring &s)
 {
   wcsupper(&s[0]);
 }
-#endif
 
 
 

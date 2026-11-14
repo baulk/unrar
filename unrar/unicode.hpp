@@ -28,12 +28,10 @@ int wcsnicomp(const wchar *s1,const wchar *s2,size_t n);
 inline int wcsnicomp(const std::wstring &s1,const std::wstring &s2,size_t n) {return wcsnicomp(s1.c_str(),s2.c_str(),n);}
 const wchar_t* wcscasestr(const wchar_t *str, const wchar_t *search);
 std::wstring::size_type wcscasestr(const std::wstring &str, const std::wstring &search);
-#ifndef SFX_MODULE
 wchar* wcslower(wchar *s);
 void wcslower(std::wstring &s);
 wchar* wcsupper(wchar *s);
 void wcsupper(std::wstring &s);
-#endif
 int toupperw(int ch);
 int tolowerw(int ch);
 int atoiw(const std::wstring &s);

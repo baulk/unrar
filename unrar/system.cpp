@@ -66,6 +66,40 @@ void SetPriority(int Priority)
 }
 #endif
 
+void CheckAllocate(uint64 Requested,uint64 MaxAllocate,const std::wstring &ArcName)
+{
+  if (MaxAllocate!=0 && Requested>MaxAllocate)
+  {
+    uiMsg(UIERROR_MAXMEMORY,ArcName,uiMsg64(MaxAllocate),uiMsg64(Requested));
+
+    ErrHandler.Exit(RARX_USERLIMIT);
+  }
+}
+
+
+void CheckDiskWrite(uint64 CurWrite,uint64 MaxWrite,const std::wstring &ArcName)
+{
+  if (MaxWrite!=0 && CurWrite>MaxWrite)
+  {
+    uiMsg(UIERROR_MAXWRITE,ArcName,uiMsg64(MaxWrite),uiMsg64(CurWrite));
+    ErrHandler.Exit(RARX_USERLIMIT);
+  }
+}
+
+
+void CheckRuntime(uint StartTime,uint MaxTime,const std::wstring &ArcName)
+{
+  if (MaxTime!=0)
+  {
+    uint SpentTime=uint(MonoClock()/CLOCKS_PER_SEC)-StartTime;
+    if (SpentTime>MaxTime)
+    {
+      uiMsg(UIERROR_MAXRUNTIME,ArcName,MaxTime,SpentTime);
+      ErrHandler.Exit(RARX_USERLIMIT);
+    }
+  }
+}
+
 
 // Monotonic clock. Like clock(), returns time passed in CLOCKS_PER_SEC items.
 // In Android 5+ and Unix usual clock() returns time spent by all threads

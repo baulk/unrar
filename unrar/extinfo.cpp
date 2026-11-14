@@ -10,9 +10,7 @@
 
 #ifdef _UNIX
 #include "uowners.cpp"
-#ifdef SAVE_LINKS
 #include "ulinks.cpp"
-#endif
 #endif
 
 
@@ -159,7 +157,8 @@ bool IsRelativeSymlinkSafe(CommandData *Cmd,const std::wstring &SrcName,std::wst
 }
 
 
-bool ExtractSymlink(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,const std::wstring &LinkName,bool &UpLink)
+bool ExtractSymlink(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,
+  const std::wstring &LinkName,const std::wstring &TargetName,bool &UpLink)
 {
   // Returning true in Uplink indicates that link target might include ".."
   // and enables additional checks. It is ok to falsely return true here,
@@ -167,22 +166,20 @@ bool ExtractSymlink(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,const std:
   // return true for links with ".." in target for security reason.
 
   UpLink=true; // Assume the target might include potentially unsafe "..".
-#if defined(SAVE_LINKS) && defined(_UNIX) || defined(_WIN_ALL)
   if (Arc.Format==RARFMT50) // For RAR5 archives we can check RedirName for both Unix and Windows.
     UpLink=Arc.FileHead.RedirName.find(L"..")!=std::wstring::npos;
-#endif
 
-#if defined(SAVE_LINKS) && defined(_UNIX)
+#ifdef _UNIX
   // For RAR 3.x archives we process links even in test mode to skip link data.
   if (Arc.Format==RARFMT15)
-    return ExtractUnixLink30(Cmd,DataIO,Arc,LinkName.c_str(),UpLink);
+    return ExtractUnixLink30(Cmd,DataIO,Arc,LinkName,UpLink);
   if (Arc.Format==RARFMT50)
-    return ExtractUnixLink50(Cmd,LinkName.c_str(),&Arc.FileHead);
+    return ExtractUnixLink50(Cmd,LinkName,TargetName,&Arc.FileHead);
 #elif defined(_WIN_ALL)
   // RAR 5.0 archives store link information in file header, so there is
   // no need to additionally test it if we do not create a file.
   if (Arc.Format==RARFMT50)
-    return CreateReparsePoint(Cmd,LinkName.c_str(),&Arc.FileHead);
+    return CreateReparsePoint(Cmd,LinkName,TargetName,&Arc.FileHead);
 #endif
   return false;
 }

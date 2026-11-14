@@ -56,7 +56,8 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <winioctl.h>
-#include <wincrypt.h>
+#pragma comment(lib, "bcrypt.lib") // For BCryptGenRandom().
+#include <bcrypt.h>
 #include <wchar.h>
 #include <wctype.h>
 #include <Sddl.h>
@@ -81,6 +82,15 @@
   #define SSE_ALIGNMENT 16
 #endif
 
+#ifdef _M_ARM64
+#include <arm_neon.h>
+
+#define USE_NEON
+#define USE_NEON_AES
+#define USE_NEON_CRC32
+#define NEON_ALIGNMENT 16
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -91,10 +101,6 @@
 #include <io.h>
 #include <time.h>
 #include <signal.h>
-
-#define SAVE_LINKS
-
-#define ENABLE_ACCESS
 
 #define DefConfigName  L"rar.ini"
 #define DefLogName     L"rar.log"
@@ -172,16 +178,10 @@
 #endif
 #endif
 
-#ifdef  S_IFLNK
-#define SAVE_LINKS
-#endif
-
 #if defined(__linux) || defined(__FreeBSD__)
 #include <sys/time.h>
 #define USE_LUTIMES
 #endif
-
-#define ENABLE_ACCESS
 
 #define DefConfigName  L".rarrc"
 #define DefLogName     L".rarlog"
@@ -233,6 +233,16 @@
 
 #ifndef SSE_ALIGNMENT // No SSE use and no special data alignment is required.
   #define SSE_ALIGNMENT 1
+#endif
+
+// Alignment 16-bit Reed-Solomon coder data. Align to value required
+// for SSE or Neon vector commands or to 16-bit required by coder itself.
+#ifdef USE_SSE
+static constexpr size_t RS16_ALIGNMENT = SSE_ALIGNMENT;
+#elif defined(USE_NEON)
+static constexpr size_t RS16_ALIGNMENT = NEON_ALIGNMENT;
+#else
+static constexpr size_t RS16_ALIGNMENT = 2;
 #endif
 
 // Solaris defines _LITTLE_ENDIAN or _BIG_ENDIAN.

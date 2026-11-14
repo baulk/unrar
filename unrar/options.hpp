@@ -73,8 +73,6 @@ enum QOPEN_MODE { QOPEN_NONE=0, QOPEN_AUTO, QOPEN_ALWAYS };
 
 enum RAR_CHARSET { RCH_DEFAULT=0,RCH_ANSI,RCH_OEM,RCH_UNICODE,RCH_UTF8 };
 
-#define     MAX_FILTER_TYPES           16
-
 enum FilterState {
   FILTER_DEFAULT=0, // No -mc<filter> switch.
   FILTER_AUTO,      // -mc<filter> switch is present.
@@ -185,6 +183,16 @@ class RAROptions
     bool SkipSymLinks;
     int Priority;
     int SleepTime;
+
+    uint64 MaxDiskWrite; // Maximum data size allowed to write to disk in bytes.
+    uint64 CurDiskWrite; // Current data size written to disk.
+
+    uint64 MaxAllocate; // Maximum RAM allowed to allocate.
+
+    // Could use a single "time threshold" variable in CLI, but need two
+    // for GUI, where multiple sequential commands are possible.
+    uint MaxRuntime; // Maximum runtime in seconds.
+    uint StartRuntime; // Runtime start point in seconds.
 
     bool UseLargePages;
 

@@ -127,7 +127,9 @@ void Rijndael::Init(bool Encrypt,const byte *key,uint keyLen,const byte * initVe
 #endif
 
 #elif defined(USE_NEON_AES)
-  #ifdef _APPLE
+  #ifdef _WIN_ARM64
+    AES_Neon=IsProcessorFeaturePresent(PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE)!=0;
+  #elif defined(_APPLE)
     // getauxval isn't available in OS X
     uint Value=0;
     size_t Size=sizeof(Value);
@@ -298,7 +300,7 @@ void Rijndael::blockEncryptNeon(const byte *input,size_t numBlocks,byte *outBuff
       vst1q_u8(block, vld1q_u8(input));
 
     uint8x16_t data = vld1q_u8(block);
-    for (uint i = 0; i < m_uRounds-1; i++)
+    for (int i = 0; i < m_uRounds-1; i++)
     {
       data = vaeseq_u8(data, vld1q_u8((byte *)m_expandedKey[i]));
       data = vaesmcq_u8(data);

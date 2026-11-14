@@ -1,6 +1,6 @@
 
 
-static bool UnixSymlink(CommandData *Cmd,const std::string &Target,const wchar *LinkName,RarTime *ftm,RarTime *fta)
+static bool UnixSymlink(CommandData *Cmd,const std::string &Target,const std::wstring &LinkName,RarTime *ftm,RarTime *fta)
 {
   CreatePath(LinkName,true,Cmd->DisableNames);
 
@@ -71,7 +71,7 @@ static bool SafeCharToWide(const std::string &Src,std::wstring &Dest)
 
 
 static bool ExtractUnixLink30(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,
-                              const wchar *LinkName,bool &UpLink)
+                              const std::wstring &LinkName,bool &UpLink)
 {
   if (IsLink(Arc.FileHead.FileAttr))
   {
@@ -100,7 +100,7 @@ static bool ExtractUnixLink30(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,
     // can include the destination path as a prefix, which can
     // confuse IsRelativeSymlinkSafe algorithm.
     if (!Cmd->AbsoluteLinks && (IsFullPath(TargetW) ||
-        !IsRelativeSymlinkSafe(Cmd,Arc.FileHead.FileName.c_str(),LinkName,TargetW.c_str())))
+        !IsRelativeSymlinkSafe(Cmd,Arc.FileHead.FileName,LinkName,TargetW)))
     {
       uiMsg(UIERROR_SKIPUNSAFELINK,Arc.FileHead.FileName,TargetW);
       ErrHandler.SetErrorCode(RARX_WARNING);
@@ -113,10 +113,10 @@ static bool ExtractUnixLink30(CommandData *Cmd,ComprDataIO &DataIO,Archive &Arc,
 }
 
 
-static bool ExtractUnixLink50(CommandData *Cmd,const wchar *Name,FileHeader *hd)
+static bool ExtractUnixLink50(CommandData *Cmd,const std::wstring &LinkName,const std::wstring &TargetName,FileHeader *hd)
 {
   std::string Target;
-  WideToChar(hd->RedirName,Target);
+  WideToChar(TargetName,Target);
   if (hd->RedirType==FSREDIR_WINSYMLINK || hd->RedirType==FSREDIR_JUNCTION)
   {
     // Windows absolute path symlinks in Unix. RAR 5.0 used \??\ prefix
@@ -125,7 +125,7 @@ static bool ExtractUnixLink50(CommandData *Cmd,const wchar *Name,FileHeader *hd)
     if (starts_with(Target,"\\??\\") || starts_with(Target,"/\?\?/"))
     {
 #if 0 // 2024.12.26: Not used anymore. We unpack absolute Windows symlinks even in Unix.
-      uiMsg(UIERROR_SLINKCREATE,nullptr,L"\"" + hd->FileName + L"\" -> \"" + hd->RedirName + L"\"");
+      uiMsg(UIERROR_SLINKCREATE,nullptr,L"\"" + hd->FileName + L"\" -> \"" + TargetName + L"\"");
       ErrHandler.SetErrorCode(RARX_WARNING);
       return false;
 #endif
@@ -143,11 +143,11 @@ static bool ExtractUnixLink50(CommandData *Cmd,const wchar *Name,FileHeader *hd)
   // the destination path as a prefix, which can confuse
   // IsRelativeSymlinkSafe algorithm.
   if (!Cmd->AbsoluteLinks && (IsFullPath(TargetW) ||
-      !IsRelativeSymlinkSafe(Cmd,hd->FileName,Name,TargetW)))
+      !IsRelativeSymlinkSafe(Cmd,hd->FileName,LinkName,TargetW)))
   {
     uiMsg(UIERROR_SKIPUNSAFELINK,hd->FileName,TargetW);
     ErrHandler.SetErrorCode(RARX_WARNING);
     return false;
   }
-  return UnixSymlink(Cmd,Target,Name,&hd->mtime,&hd->atime);
+  return UnixSymlink(Cmd,Target,LinkName,&hd->mtime,&hd->atime);
 }

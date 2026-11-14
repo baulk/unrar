@@ -160,10 +160,7 @@ bool MergeArchive(Archive &Arc,ComprDataIO *DataIO,bool ShowFileName,wchar Comma
   else
     Arc.ReadHeader();
   if (Arc.GetHeaderType()==HEAD_FILE)
-  {
-    Arc.ConvertAttributes();
     Arc.Seek(Arc.NextBlockPos-Arc.FileHead.PackSize,SEEK_SET);
-  }
   if (ShowFileName && !Cmd->DisableNames)
   {
     mprintf(St(MExtrPoints),Arc.FileHead.FileName.c_str());

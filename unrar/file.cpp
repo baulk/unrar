@@ -161,17 +161,17 @@ bool File::Open(const std::wstring &Name,uint Mode)
 
 
 #if !defined(SFX_MODULE)
-void File::TOpen(const std::wstring &Name)
+void File::TOpen(const std::wstring &Name,uint Mode)
 {
-  if (!WOpen(Name))
+  if (!WOpen(Name,Mode))
     ErrHandler.Exit(RARX_OPEN);
 }
 #endif
 
 
-bool File::WOpen(const std::wstring &Name)
+bool File::WOpen(const std::wstring &Name,uint Mode)
 {
-  if (Open(Name))
+  if (Open(Name,Mode))
     return true;
   ErrHandler.OpenErrorMsg(Name);
   return false;
@@ -213,7 +213,9 @@ bool File::Create(const std::wstring &Name,uint Mode)
 #ifdef FILE_USE_OPEN
   std::string NameA;
   WideToChar(Name,NameA);
-  hFile=open(NameA.c_str(),(O_CREAT|O_TRUNC) | (WriteMode ? O_WRONLY : O_RDWR),0666);
+  // 2026.09.18: Added O_NOFOLLOW as the additional protection against
+  // overwriting the link target.
+  hFile=open(NameA.c_str(),(O_CREAT|O_TRUNC|O_NOFOLLOW) | (WriteMode ? O_WRONLY : O_RDWR),0666);
 #else
   hFile=fopen(NameA.c_str(),WriteMode ? WRITEBINARY:CREATEBINARY);
 #endif
@@ -329,10 +331,13 @@ bool File::Write(const void *Data,size_t Size)
     DWORD Written=0;
     if (HandleType!=FILE_HANDLENORMAL)
     {
-      // writing to stdout can fail in old Windows if data block is too large
+      // Writing to stdout can fail in old Windows if data block is too large.
       const size_t MaxSize=0x4000;
       for (size_t I=0;I<Size;I+=MaxSize)
       {
+        // Stdout and its redirections are blocking pipes, so if WriteFile
+        // returned Success, it has written the exactly requested size
+        // and checking written size is excessive.
         Success=WriteFile(hFile,(byte *)Data+I,(DWORD)Min(Size-I,MaxSize),&Written,NULL)!=FALSE;
         if (!Success)
           break;
@@ -398,14 +403,13 @@ int File::Read(void *Data,size_t Size)
         if (ReadErrorMode==FREM_IGNORE)
         {
           ReadSize=0;
-          for (size_t I=0;I<Size;I+=512)
+          const uint SmallReadSize=512; // After read error attempt to read in smaller blocks.
+          for (size_t I=0;I<Size;I+=SmallReadSize)
           {
             Seek(FilePos+I,SEEK_SET);
-            size_t SizeToRead=Min(Size-I,512);
-            int ReadCode=DirectRead(Data,SizeToRead);
-            ReadSize+=(ReadCode==-1) ? 512:ReadCode;
-            if (ReadSize!=-1)
-              TotalRead+=ReadSize;
+            size_t SizeToRead=Min(Size-I,SmallReadSize);
+            int ReadCode=DirectRead((byte*)Data+I,SizeToRead);
+            ReadSize+=(ReadCode==-1) ? SmallReadSize:ReadCode;
           }
         }
         else

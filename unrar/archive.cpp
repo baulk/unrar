@@ -151,29 +151,45 @@ bool Archive::IsArchive(bool EnableBroken)
   }
   else
   {
-    std::vector<char> Buffer(MAXSFXSIZE);
-    const long CurPos=1;
-    // Seek back in case SFX module is shorter than SIZEOF_MARKHEAD3.
-    Seek(CurPos,SEEK_SET);
-    int ReadSize=Read(Buffer.data(),Buffer.size()-16);
-    for (int I=0;I<ReadSize;I++)
-      if (Buffer[I]==0x52 && (Type=IsSignature((byte *)&Buffer[I],ReadSize-I))!=RARFMT_NONE)
-      {
-        Format=Type;
-        if (Format==RARFMT14 && I>0 && CurPos<28 && ReadSize>31)
+    const size_t BufSize=0x40000,Overlap=16;
+    std::vector<byte> Buffer(Max(BufSize,Overlap+1));
+    uint64 BufPos=0; // Start position in archive for current buffer.
+
+    while (true)
+    {
+      Seek(BufPos,SEEK_SET);
+      size_t SizeToRead=(size_t)Min(Buffer.size(),MAXSFXSIZE-BufPos);
+      int ReadSize=Read(Buffer.data(),SizeToRead);
+
+      for (int I=0;I<ReadSize;I++)
+        if (Buffer[I]==0x52 && (Type=IsSignature(&Buffer[I],ReadSize-I))!=RARFMT_NONE)
         {
-          char *D=&Buffer[28-CurPos];
-          if (D[0]!=0x52 || D[1]!=0x53 || D[2]!=0x46 || D[3]!=0x58)
+          Format=Type;
+
+          // There was 'RSFX' signature at position 28 in RAR 1.4 SFX.
+          // Since RAR 1.4 signature is just 4 bytes, it is better to check
+          // this additional signature to reduce false detections.
+          if (Format==RARFMT14 && BufPos==0 && ReadSize>31 &&
+              (Buffer[28]!=0x52 || Buffer[29]!=0x53 || Buffer[30]!=0x46 || Buffer[31]!=0x58))
             continue;
+
+          SFXSize=(size_t)(BufPos+I);
+          break;
         }
-        SFXSize=CurPos+I;
-        Seek(SFXSize,SEEK_SET);
-        if (Format==RARFMT15 || Format==RARFMT50)
-          Read(MarkHead.Mark,SIZEOF_MARKHEAD3);
+
+      // If read size is less than full buffer size, it was the last buffer.
+      if (SFXSize>0 || ReadSize!=Buffer.size())
         break;
-      }
+
+      // Overlap buffers to detect a signature split between them.
+      BufPos+=ReadSize-Overlap;
+    }
     if (SFXSize==0)
       return false;
+ 
+    Seek(SFXSize,SEEK_SET);
+    if (Format==RARFMT15 || Format==RARFMT50)
+      Read(MarkHead.Mark,SIZEOF_MARKHEAD3);
   }
   if (Format==RARFMT_FUTURE)
   {

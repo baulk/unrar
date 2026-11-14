@@ -3,6 +3,15 @@
 
 class RSCoder16
 {
+  public:
+#ifdef RAR_SMP
+    struct InvertThreadData
+    {
+      RSCoder16 *Coder;
+      uint Start,End,Kr,Kf,*MI,*MXk,*MIk;
+    };
+    void InvertArea(InvertThreadData *td);
+#endif
   private:
     static const uint gfSize=65535;   // Galois field size.
     void gfInit();                    // Galois field inititalization.
@@ -12,15 +21,25 @@ class RSCoder16
     uint *gfExp;                      // Galois field exponents.
     uint *gfLog;                      // Galois field logarithms.
 
+    std::vector<ushort> MultTab;      // Multiplication table.
+
     void MakeEncoderMatrix();
     void MakeDecoderMatrix();
     void InvertDecoderMatrix();
 
 #ifdef USE_SSE
-#if defined(USE_SSE) && defined(__GNUC__)
+#ifdef __GNUC__
     __attribute__((target("ssse3")))
 #endif
     bool SSE_UpdateECC(uint DataNum, uint ECCNum, const byte *Data, byte *ECC, size_t BlockSize);
+#endif
+#ifdef USE_NEON
+    bool NEON_UpdateECC(uint DataNum, uint ECCNum, const byte *Data, byte *ECC, size_t BlockSize);
+#endif
+
+#ifdef RAR_SMP
+    ThreadPool *RSThreadPool = nullptr;
+    uint MaxThreads = 0;
 #endif
 
     bool Decoding;    // If we are decoding or encoding data.
@@ -30,9 +49,11 @@ class RSCoder16
     bool *ValidFlags; // Validity flags for data and ECC units.
     uint *MX;         // Cauchy based coding or decoding matrix.
 
-    uint *DataLog; // Buffer to store data logarithms for UpdateECC.
-    size_t DataLogSize;
-
+    // If we create multiple coders with same parameters for multithreaded
+    // processing, it is faster and takes less memory to share a single MX copy
+    // between coders. Especially noticeable when recoving a lot of RAR volumes
+    // using REV volumes.
+    uint **SharedMX = nullptr; // Points to pointer of optional external MX.
   public:
     RSCoder16();
     ~RSCoder16();
@@ -42,6 +63,10 @@ class RSCoder16
     void Process(const uint *Data, uint *Out);
 #endif
     void UpdateECC(uint DataNum, uint ECCNum, const byte *Data, byte *ECC, size_t BlockSize);
+#ifdef RAR_SMP
+    void SetThreadPool(ThreadPool *Pool,uint Threads) {RSThreadPool=Pool;MaxThreads=Threads;}
+#endif
+    void SetSharedMX(uint **ExtMX) {SharedMX=ExtMX;}
 };
 
 #endif

@@ -42,7 +42,9 @@ void InitCRC32(uint *CRCTab)
   }
 
 #ifdef USE_NEON_CRC32
-  #ifdef _APPLE
+  #ifdef _WIN_ARM64
+    CRC_Neon=IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE)!=0;
+  #elif defined(_APPLE)
     // getauxval isn't available in OS X
     uint Value=0;
     size_t Size=sizeof(Value);
@@ -84,13 +86,17 @@ uint CRC32(uint StartCRC,const void *Addr,size_t Size)
   if (CRC_Neon)
   {
     for (;Size>=8;Size-=8,Data+=8)
-#ifdef __clang__
+#ifdef _MSC_VER
+      StartCRC = __crc32d(StartCRC, RawGet8(Data));
+#elif defined(__clang__)
       StartCRC = __builtin_arm_crc32d(StartCRC, RawGet8(Data));
 #else
       StartCRC = __builtin_aarch64_crc32x(StartCRC, RawGet8(Data));
 #endif
     for (;Size>0;Size--,Data++) // Process left data.
-#ifdef __clang__
+#ifdef _MSC_VER
+      StartCRC = __crc32b(StartCRC, *Data);
+#elif defined(__clang__)
       StartCRC = __builtin_arm_crc32b(StartCRC, *Data);
 #else
       StartCRC = __builtin_aarch64_crc32b(StartCRC, *Data);

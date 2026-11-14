@@ -20,6 +20,7 @@
 #define ERAR_EREFERENCE         23
 #define ERAR_BAD_PASSWORD       24
 #define ERAR_LARGE_DICT         25
+#define ERAR_USER_LIMIT         26
 
 #define RAR_OM_LIST              0
 #define RAR_OM_EXTRACT           1
@@ -32,7 +33,7 @@
 #define RAR_VOL_ASK           0
 #define RAR_VOL_NOTIFY        1
 
-#define RAR_DLL_VERSION      10
+#define RAR_DLL_VERSION      11
 
 #define RAR_HASH_NONE         0
 #define RAR_HASH_CRC32        1
@@ -159,7 +160,10 @@ struct RAROpenArchiveDataEx
   unsigned int  OpFlags;
   wchar_t      *CmtBufW;
   wchar_t      *MarkOfTheWeb;
-  unsigned int  Reserved[23];
+  unsigned int  MaxDiskWrite;
+  unsigned int  MaxAllocate;
+  unsigned int  MaxRuntime;
+  unsigned int  Reserved[20];
 };
 
 enum UNRARCALLBACK_MESSAGES {
